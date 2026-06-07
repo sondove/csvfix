@@ -36,12 +36,26 @@ class InterCommand : public Command {
 				: mSrc( src ), mField( fi ) {}
 		};
 
+		// a field specified by header name, with its source stream (L/R)
+		struct NameField {
+			unsigned int mSrc;
+			std::string mName;
+			NameField( unsigned int src, const std::string & nm )
+				: mSrc( src ), mName( nm ) {}
+		};
+
 		CSVRow Interleave( const CSVRow & r1 , const CSVRow & r2 ) const;
 		std::string GetField( const FieldSpec & f,  const CSVRow & r1 ,
 											const CSVRow & r2 ) const;
 
 		FieldSpec MakeField( const std::string &  f ) const;
+		NameField MakeNameField( const std::string & f ) const;
+		void ResolveNames( const ALib::CSVStreamParser * p0,
+							const ALib::CSVStreamParser * p1 );
+
 		std::vector <FieldSpec> mFields;
+		std::vector <NameField> mNameFields;
+		bool mHasNames;
 };
 
 //------------------------------------------------------------------------

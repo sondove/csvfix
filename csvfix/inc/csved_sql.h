@@ -11,11 +11,14 @@
 
 #include "a_base.h"
 #include "csved_command.h"
+#include "csved_ioman.h"
 
 namespace CSVED {
 
 //---------------------------------------------------------------------------
-// Spexify a column as 1-based index and name
+// Specify a column as 1-based index and name. mFieldName is set instead of
+// mField when the CSV field was specified by header name; it is resolved to
+// mField once the input header has been read.
 //----------------------------------------------------------------------------
 
 struct SQLColSpec {
@@ -24,9 +27,11 @@ struct SQLColSpec {
 
 	unsigned int mField;
 	std::string mColName;
+	std::string mFieldName;
 
-	SQLColSpec( unsigned int f, const std::string & c )
-				: mField( f ), mColName( c ) {}
+	SQLColSpec( unsigned int f, const std::string & c,
+					const std::string & fn = "" )
+				: mField( f ), mColName( c ), mFieldName( fn ) {}
 
 	friend std::ostream & operator << ( std::ostream & os,
 										const SQLColSpec & s ) {
@@ -38,19 +43,27 @@ struct SQLColSpec {
 // Base class for SQL commands specifies columns, table etc.
 //----------------------------------------------------------------------------
 
-class SQLCommand : public Command {
+class SQLCommand : public Command, public IOWatcher {
 
 	public:
 
 		SQLCommand( const std::string & name,
 						const std::string & desc,
 						const std::string & help );
+
+		// resolve any header-name field specs from the input header
+		void OnNewCSVStream( const std::string & filename,
+								const ALib::CSVStreamParser * p );
+
 	protected:
 
 		void GetCommonValues( ALib::CommandLine & cmd );
 
 		void BuildDataCols( const ALib::CommandLine & cmd );
 		void BuildWhereCols( const ALib::CommandLine & cmd );
+
+		bool HasNames() const { return mHasNames; }
+		void WireNames( IOManager & io );
 
 		void MustHaveDataNames() const;
 		void MustHaveWhereNames() const;
@@ -72,12 +85,14 @@ class SQLCommand : public Command {
 
 		void BuildCols( const ALib::CommandLine & cmd,
 						const std::string & flag,
+						const std::string & nameFlag,
 						SQLColSpec::Vec & cols );
 
 		std::string mTable, mSep;
 		FieldList mNoQuote;
 		SQLColSpec::Vec mDataCols, mWhereCols;
 		bool mQuoteNulls, mEmptyNulls;
+		bool mHasNames;
 };
 
 //---------------------------------------------------------------------------

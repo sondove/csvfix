@@ -11,6 +11,7 @@
 
 #include "a_base.h"
 #include "csved_command.h"
+#include "csved_util.h"
 #include <stack>
 #include <vector>
 #include <memory>
@@ -27,6 +28,10 @@ class RowGetter {
 		bool Get( CSVRow & row );
 		void ClearLatch();
 
+		const ALib::CSVStreamParser * Parser() const {
+			return mParser;
+		}
+
 	private:
 
 		ALib::CSVStreamParser * mParser;
@@ -38,7 +43,8 @@ class MinFinder {
 
 	public:
 
-		MinFinder( IOManager & io, const FieldList & fields );
+		MinFinder( IOManager & io, const FieldList & fields,
+					FieldSpec * spec = 0 );
 		~MinFinder();
 
 		bool FindMin( CSVRow & row );
@@ -47,6 +53,7 @@ class MinFinder {
 
 		std::vector <RowGetter *> mGetters;
 		const FieldList & mFields;
+		FieldSpec * mSpec;
 
 };
 
@@ -65,6 +72,7 @@ class FMergeCommand : public Command {
 		void ProcessFlags( ALib::CommandLine & cmd );
 
 		FieldList mFields;
+		FieldSpec mSpec;
 
 
 };

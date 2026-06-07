@@ -36,7 +36,8 @@ const char * const EXCL_HELP = {
 	"exclude specific CSV input fields from output\n"
 	"usage: csvfix exclude  [flags] [file ...]\n"
 	"where flags are:\n"
-	"  -f fields\tlist of fields to exclude\n"
+	"  -f fields\tlist of fields to exclude, by numeric index\n"
+	"  -fn names\tlist of fields to exclude, by header name\n"
 	"  -rf fields\tlist of fields to exclude, starting from end of record\n"
 	"  -if expr\texclude fields specified by -f if expr evaluates to true\n"
 	"#ALL,SKIP,PASS"
@@ -51,6 +52,7 @@ ExcludeCommand ::ExcludeCommand( const string & name,
 		: Command( name, desc, EXCL_HELP ), mReverse( false ) {
 
 	AddFlag( ALib::CommandLineFlag( FLAG_COLS, false, 1 ) );
+	AddFlag( ALib::CommandLineFlag( FLAG_FNAMES, false, 1 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_REVCOLS, false, 1 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_IF, false, 1 ) );
 }
@@ -65,7 +67,8 @@ int ExcludeCommand :: Execute( ALib::CommandLine & cmd ) {
 	GetSkipOptions( cmd );
 	ProcessFlags( cmd );
 
-	IOManager io( cmd );
+	IOManager io( cmd, mSpec.HasNames() );
+	mSpec.Wire( io );
 	CSVRow row;
 
 	while( io.ReadCSV( row ) ) {
@@ -107,8 +110,6 @@ bool ExcludeCommand :: EvalExprOnRow( IOManager & io, const CSVRow & row ) {
 
 void ExcludeCommand :: ProcessFlags( const ALib::CommandLine & cmd ) {
 
-	NotBoth( cmd, FLAG_REVCOLS, FLAG_COLS, ReqOp::Required );
-
 	string es = cmd.GetValue( FLAG_IF, "" );
 	if ( es != "" ) {
 		string emsg = mExpr.Compile( es );
@@ -118,14 +119,30 @@ void ExcludeCommand :: ProcessFlags( const ALib::CommandLine & cmd ) {
 
 	}
 	mReverse = cmd.HasFlag( FLAG_REVCOLS );
-	string sn = cmd.GetValue( FLAG_COLS, ""  );
-	if ( sn == "" ) {
-		sn = cmd.GetValue( FLAG_REVCOLS, ""  );
+
+	if ( mReverse ) {
+		// reverse fields are counted from the end of the record, so only
+		// numeric indexes make sense here.
+		if ( cmd.HasFlag( FLAG_COLS ) || cmd.HasFlag( FLAG_FNAMES ) ) {
+			CSVTHROW( "Cannot combine " << FLAG_REVCOLS << " with "
+						<< FLAG_COLS << " or " << FLAG_FNAMES );
+		}
+		string sn = cmd.GetValue( FLAG_REVCOLS, "" );
+		CommaListToIndex( ALib::CommaList( sn ), mFields );
+		if ( mFields.size() == 0 ) {
+			CSVTHROW( "Field list  specified by " << FLAG_REVCOLS
+							<< " cannot be empty" );
+		}
 	}
-	CommaListToIndex( ALib::CommaList( sn ), mFields );
-	if ( mFields.size() == 0 ) {
-		CSVTHROW( "Field list  specified by " << FLAG_COLS << " or "
-						<< FLAG_REVCOLS << " cannot be empty" );
+	else {
+		// forward fields by numeric index (-f) or header name (-fn)
+		mSpec.Bind( mFields );
+		mSpec.ReadFlags( cmd );
+		if ( mSpec.Empty() ) {
+			CSVTHROW( "Field list  specified by " << FLAG_COLS << ", "
+							<< FLAG_FNAMES << " or " << FLAG_REVCOLS
+							<< " cannot be empty" );
+		}
 	}
 }
 

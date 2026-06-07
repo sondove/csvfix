@@ -11,6 +11,7 @@
 
 #include "a_base.h"
 #include "csved_command.h"
+#include "csved_util.h"
 
 namespace CSVED {
 
@@ -34,9 +35,14 @@ class DSVBase : public Command {
 		void ReadFlags( const ALib::CommandLine & cl );
 		void BuildCSVRow( const CSVRow & in, CSVRow & out ) const;
 
+	protected:
+
+		FieldSpec & Spec();
+
 	private:
 
 		FieldList mFields;
+		FieldSpec mSpec;
 		char mDelim;
 };
 

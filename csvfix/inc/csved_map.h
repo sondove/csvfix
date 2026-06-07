@@ -11,6 +11,7 @@
 
 #include "a_base.h"
 #include "csved_command.h"
+#include "csved_util.h"
 
 namespace CSVED {
 
@@ -35,6 +36,7 @@ class MapCommand : public Command {
 		bool mIgnoreCase;
 		ALib::CommaList mFrom, mTo;
 		FieldList mFields;
+		FieldSpec mSpec;
 		CSVRow mRow;
 
 };

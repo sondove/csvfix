@@ -41,7 +41,8 @@ const char * const DREAD_HELP = {
 	"converts date fields to ISO YYYY-MM-DD format\n"
 	"usage: csvfix date_iso [flags] [files ...]\n"
 	"where flags are:\n"
-	"  -f fields\tspecify fields using numeric field indexes\n"
+	"  -f fields\tspecify fields to convert (by numeric index)\n"
+	"  -fn names\tspecify fields to convert (by header name)\n"
 	"  -m mask\tspecifies order of date components in d/m/y form\n"
 	"  -cy year\tspecifies base year for 2-digit year values\n"
 	"  -mn names\tspecifies month names - default is English months\n"
@@ -54,7 +55,8 @@ const char * const DFMT_HELP = {
 	"format dates for output\n"
 	"usage: csvfix date_format [flags] [files ...]\n"
 	"where flags are:\n"
-	"  -f fields\tspecify fields using numeric field indexes\n"
+	"  -f fields\tspecify fields to format (by numeric index)\n"
+	"  -fn names\tspecify fields to format (by header name)\n"
 	"  -fmt fmt\tformat to to ue for output\n"
 	"#SMQ,SEP,IBL,IFN,OFL,SKIP,PASS"
 };
@@ -81,7 +83,8 @@ DateReadCommand :: DateReadCommand( const string & name,
 								const string & desc )
 		: Command( name, desc, DREAD_HELP ), mReader( 0 ),
 				mWriteAction( WriteAll ) {
-	AddFlag( ALib::CommandLineFlag( FLAG_COLS, true, 1 ) );
+	AddFlag( ALib::CommandLineFlag( FLAG_COLS, false, 1 ) );
+	AddFlag( ALib::CommandLineFlag( FLAG_FNAMES, false, 1 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_MASK, true, 1 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_CDATE, false, 1 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_MNAMES, false, 1 ) );
@@ -107,7 +110,8 @@ int DateReadCommand :: Execute( ALib::CommandLine & cmd ) {
 	GetSkipOptions( cmd );
 	ProcessFlags( cmd );
 
-	IOManager io( cmd );
+	IOManager io( cmd, mSpec.HasNames() );
+	mSpec.Wire( io );
 	CSVRow row;
 
 	while( io.ReadCSV( row ) ) {
@@ -165,8 +169,8 @@ bool DateReadCommand :: ConvertDates( CSVRow & row ) {
 
 void DateReadCommand :: ProcessFlags( ALib::CommandLine & cmd ) {
 
-	ALib::CommaList cl( cmd.GetValue( FLAG_COLS, "" ) );
-	CommaListToIndex( cl, mFields );
+	mSpec.Bind( mFields );
+	mSpec.ReadFlags( cmd, "" );
 	string mask = cmd.GetValue( FLAG_MASK, "" );
 	string cys = cmd.GetValue( FLAG_CDATE, ALib::Str( BASE_YEAR ) );
 
@@ -206,7 +210,8 @@ DateFormatCommand  :: DateFormatCommand( const string & name,
 											const string & desc )
 	: Command( name, desc, DFMT_HELP ) {
 
-	AddFlag( ALib::CommandLineFlag( FLAG_COLS, true, 1 ) );
+	AddFlag( ALib::CommandLineFlag( FLAG_COLS, false, 1 ) );
+	AddFlag( ALib::CommandLineFlag( FLAG_FNAMES, false, 1 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_FMT, true, 1 ) );
 }
 
@@ -217,7 +222,8 @@ DateFormatCommand  :: DateFormatCommand( const string & name,
 int DateFormatCommand  :: Execute( ALib::CommandLine & cmd ) {
 	ProcessFlags( cmd );
 
-	IOManager io( cmd );
+	IOManager io( cmd, mSpec.HasNames() );
+	mSpec.Wire( io );
 	CSVRow row;
 
 	while( io.ReadCSV( row ) ) {
@@ -307,8 +313,8 @@ string DateFormatCommand :: FormatDate( const string & ds ) {
 //---------------------------------------------------------------------------
 
 void DateFormatCommand :: ProcessFlags( ALib::CommandLine & cmd ) {
-	ALib::CommaList cl( cmd.GetValue( FLAG_COLS, "" ) );
-	CommaListToIndex( cl, mFields );
+	mSpec.Bind( mFields );
+	mSpec.ReadFlags( cmd, "" );
 	string fmt = cmd.GetValue( FLAG_FMT, "" );
 	if ( ALib::IsEmpty( fmt ) ) {
 		CSVTHROW( "Empty date format" );

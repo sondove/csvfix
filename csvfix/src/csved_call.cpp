@@ -48,7 +48,8 @@ const char * const CALL_HELP = {
 	"where flags are:\n"
 	"  -fnc name\tname of function to call\n"
 	"  -dll name\tfilename of DLL containing function\n"
-	"  -f fields\tindexes of fields to pass to the function\n"
+	"  -f fields\tfields to pass to the function (by numeric index)\n"
+	"  -fn names\tfields to pass to the function (by header name)\n"
 	"  -bs size\tsize in Kbytes of buffer used to communicate with DLL (default 4K)\n "
 	"#ALL,SKIP,PASS"
 };
@@ -64,6 +65,7 @@ CallCommand :: CallCommand( const string & name, const string & desc )
 	AddFlag( ALib::CommandLineFlag( FLAG_DLL, true, 1 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_FUNC, true, 1 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_COLS, false, 1 ) );
+	AddFlag( ALib::CommandLineFlag( FLAG_FNAMES, false, 1 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_BSIZE, false, 1 ) );
 }
 
@@ -90,7 +92,8 @@ int CallCommand :: Execute( ALib::CommandLine & cmd ) {
 		CSVTHROW( "Cannot load function " << mFuncName << "from DLL " << mDLL );
 	}
 
-	IOManager io( cmd );
+	IOManager io( cmd, mSpec.HasNames() );
+	mSpec.Wire( io );
 	CSVRow row;
 
 	while( io.ReadCSV( row ) ) {
@@ -175,8 +178,8 @@ void CallCommand :: ProcessFlags( const ALib::CommandLine & cmd ) {
 	}
 	mDLL = cmd.GetValue( FLAG_DLL );
 	mFuncName = cmd.GetValue( FLAG_FUNC );
-	ALib::CommaList cl( cmd.GetValue( FLAG_COLS ) );
-	CommaListToIndex( cl, mFields );
+	mSpec.Bind( mFields );
+	mSpec.ReadFlags( cmd, "" );
 
 }
 

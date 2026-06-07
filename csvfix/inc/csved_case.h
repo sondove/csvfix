@@ -11,6 +11,7 @@
 
 #include "a_str.h"
 #include "csved_command.h"
+#include "csved_util.h"
 
 namespace CSVED {
 
@@ -36,6 +37,9 @@ class CaseBase : public Command {
 	private:
 
 		void ProcessRow( CSVRow & row, std::vector <unsigned int > & ci );
+
+		std::vector <unsigned int> mColIndex;
+		FieldSpec mSpec;
 
 };
 

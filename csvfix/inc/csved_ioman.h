@@ -17,22 +17,12 @@
 
 namespace CSVED {
 
-//---------------------------------------------------------------------------
-// IOManager supports watchers for I/O events - only one event so far  - the
-// opening of a new CSv stream for input.
 //----------------------------------------------------------------------------
-
-class IOWatcher {
-
-	public:
-
-		virtual ~IOWatcher();
-		virtual void OnNewCSVStream( const std::string & filename,
-										const ALib::CSVStreamParser * p ) = 0;
-};
-
-
-//----------------------------------------------------------------------------
+// IOManager supports watchers for I/O events - only one event so far - the
+// opening of a new CSV stream for input. The IOWatcher base class is declared
+// in csved_util.h (included above) so that shared helpers such as FieldSpec
+// can derive from it without a circular include.
+//
 // IOManager handles all file opening, readinf & CSV parsing actions
 //----------------------------------------------------------------------------
 
@@ -47,6 +37,8 @@ class IOManager {
 		~IOManager();
 
 		void AddWatcher( IOWatcher & w );
+
+		void IgnoreColNames( bool b );
 
 		unsigned int InStreamCount() const;
 

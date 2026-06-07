@@ -37,7 +37,8 @@ const char * const NUMBER_HELP = {
 	"convert formatted numeric fields to ordinary numeric\n"
 	"usage: csvfix number  [flags] [file ...]\n"
 	"where flags are:\n"
-	"  -f fields\tfields to convert - default is all\n"
+	"  -f fields\tfields to convert (by numeric index)\n"
+	"  -fn names\tfields to convert (by header name)\n"
 	"  -fmt fmt\tformat of input fields - one of EU or EN (default)\n"
 	"  -es str\treplace fields that cannot be read with this string\n"
 	"  -ec \t\tconversion failure is an error\n"
@@ -53,6 +54,7 @@ NumberCommand :: NumberCommand( const string & name, const string & desc )
 					mErrExit( false ), mHasErrStr( false ) {
 
 	AddFlag( ALib::CommandLineFlag( FLAG_COLS, false, 1 ) );
+	AddFlag( ALib::CommandLineFlag( FLAG_FNAMES, false, 1 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_FMT, false, 1 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_ERRSTR, false, 1 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_ERRCODE, false, 0 ) );
@@ -77,7 +79,8 @@ int NumberCommand :: Execute( ALib::CommandLine & cmd )  {
     GetSkipOptions( cmd );
     ProcessFlags( cmd );
 
-	IOManager io( cmd );
+	IOManager io( cmd, mSpec.HasNames() );
+	mSpec.Wire( io );
 	CSVRow row;
 
 	while( io.ReadCSV( row ) ) {
@@ -155,11 +158,8 @@ void NumberCommand :: Convert( CSVRow & row ) {
 
 void NumberCommand :: ProcessFlags( const ALib::CommandLine & cmd ) {
 
-	string cs = cmd.GetValue( FLAG_COLS );
-	if ( ! ALib::IsEmpty( cs ) ) {
-		ALib::CommaList cl( cs );
-		CommaListToIndex( cl, mFields );
-	}
+	mSpec.Bind( mFields );
+	mSpec.ReadFlags( cmd, "" );
 	mFormat = cmd.GetValue( FLAG_FMT, EN_FMT);
 	if ( mFormat != EN_FMT && mFormat != EU_FMT ) {
 		CSVTHROW( FLAG_FMT << " must be " << EN_FMT << " or " << EU_FMT );

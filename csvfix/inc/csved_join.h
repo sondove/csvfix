@@ -34,6 +34,8 @@ class JoinCommand : public Command {
 
 		void BuildRowMap( ALib::CSVStreamParser * p );
 		void BuildJoinSpecs( const std::string & s );
+		void ResolveLeft( const ALib::CSVStreamParser * p );
+		void ResolveRight( const ALib::CSVStreamParser * p );
 		void Clear();
 		bool IsJoinCol( unsigned int i ) const;
 		std::string MakeKey( const CSVRow & row, bool first );
@@ -43,6 +45,11 @@ class JoinCommand : public Command {
 
 		typedef std::vector <std::pair <int,int> > JoinSpecType;
 		JoinSpecType mJoinSpecs;
+
+		// join specs given by header name, resolved per stream into mJoinSpecs
+		typedef std::vector <std::pair <std::string,std::string> > NamePairType;
+		NamePairType mNamePairs;
+		bool mHasNames;
 
 		typedef std::multimap <std::string, CSVRow> MapType;
 		MapType mRowMap;

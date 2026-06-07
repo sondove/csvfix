@@ -36,7 +36,8 @@ const char * const RMNEW_HELP = {
 	"where flags are:\n"
 	"  -s sep\tseparator text to replace newline\n"
 	"  -x\t\texclude data after first newline in field\n"
-	"  -f fields\tfields to apply command to (default is all)\n"
+	"  -f fields\tfields to apply command to (by numeric index) (default is all)\n"
+	"  -fn names\tfields to apply command to (by header name)\n"
 	"#SMQ,SEP,IBL,IFN,OFL,SKIP,PASS"
 };
 
@@ -53,6 +54,7 @@ RemoveNewlineCommand :: RemoveNewlineCommand( const string & name,
 	AddFlag( ALib::CommandLineFlag( FLAG_STR, false, 1 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_EXCLNL, false, 0 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_COLS, false, 1 ) );
+	AddFlag( ALib::CommandLineFlag( FLAG_FNAMES, false, 1 ) );
 }
 
 //---------------------------------------------------------------------------
@@ -64,7 +66,8 @@ int RemoveNewlineCommand :: Execute( ALib::CommandLine & cmd ) {
 	GetSkipOptions( cmd );
 	ProcessFlags( cmd );
 
-	IOManager io( cmd );
+	IOManager io( cmd, mSpec.HasNames() );
+	mSpec.Wire( io );
 	CSVRow row;
 
 	while( io.ReadCSV( row ) ) {
@@ -144,9 +147,8 @@ void RemoveNewlineCommand :: ExpandSep( void )  {
 
 void RemoveNewlineCommand :: ProcessFlags( const ALib::CommandLine & cmd ) {
 
-	string scols = cmd.GetValue( FLAG_COLS, "" );
-	ALib::CommaList cl( cmd.GetValue( FLAG_COLS, "" ) );
-	CommaListToIndex( cl, mFields);
+	mSpec.Bind( mFields );
+	mSpec.ReadFlags( cmd, "" );
 	if ( cmd.HasFlag( FLAG_EXCLNL ) && cmd.HasFlag( FLAG_STR ) ) {
 		CSVTHROW( "Flags " << FLAG_EXCLNL << " and " << FLAG_STR
 					<< " are mutually exclusive" );

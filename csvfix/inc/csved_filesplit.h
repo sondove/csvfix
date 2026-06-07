@@ -11,6 +11,7 @@
 
 #include "a_base.h"
 #include "csved_command.h"
+#include "csved_util.h"
 #include <fstream>
 #include <map>
 #include <string>
@@ -39,6 +40,7 @@ class FileSplitCommand : public Command {
 		std::string mDir, mFilePrefix, mFileExt, mCurrentFile;
         std::map <std::string, std::string> mDict;
 		std::vector <unsigned int> mColIndex;
+		FieldSpec mSpec;
 		unsigned int mFileNo;
 		std::ofstream mOutFile;
 		bool mUseFieldNames;

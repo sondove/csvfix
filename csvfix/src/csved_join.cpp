@@ -36,7 +36,8 @@ const char * const JOIN_HELP = {
 	"streams are joined in turn against the last stream on the command line\n"
 	"usage: csvfix join  [flags] [file ...]\n"
 	"where flags are:\n"
-	"  -f jlist\tlist of fields to perform join on\n"
+	"  -f jlist\tlist of fields to perform join on, by numeric index (e.g. 1:2)\n"
+	"  -fn jlist\tlist of fields to perform join on, by header name (e.g. id:custid)\n"
 	"  -oj\t\tperform outer join\n"
 	"  -inv\t\tinvert sense of join to exclude matching rows\n"
 	"  -ic\t\tignore character case in join columns\n"
@@ -51,9 +52,11 @@ const char * const JOIN_HELP = {
 JoinCommand :: JoinCommand( const string & name,
 							const string & desc )
 			: Command( name, desc, JOIN_HELP),
-					mOuterJoin( false ), mIgnoreCase( false ), mKeep( false ) {
+					mOuterJoin( false ), mHasNames( false ),
+					mIgnoreCase( false ), mKeep( false ) {
 
-	AddFlag( ALib::CommandLineFlag( FLAG_COLS, true, 1 ) );
+	AddFlag( ALib::CommandLineFlag( FLAG_COLS, false, 1 ) );
+	AddFlag( ALib::CommandLineFlag( FLAG_FNAMES, false, 1 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_OUTERJ, false, 0 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_INVERT, false, 0 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_ICASE, false, 0 ) );
@@ -74,6 +77,7 @@ JoinCommand :: ~JoinCommand() {
 
 void JoinCommand :: Clear() {
 	mJoinSpecs.clear();
+	mNamePairs.clear();
 	mRowMap.clear();
 }
 
@@ -93,10 +97,15 @@ int JoinCommand :: Execute( ALib::CommandLine & cmd ) {
 		CSVTHROW( "Cannot have both " << FLAG_OUTERJ
 					<< " and " << FLAG_INVERT << " flags" );
 	}
-	string js = cmd.GetValue( FLAG_COLS );
+	if ( cmd.HasFlag( FLAG_COLS ) && cmd.HasFlag( FLAG_FNAMES ) ) {
+		CSVTHROW( "Cannot specify both " << FLAG_COLS
+					<< " and " << FLAG_FNAMES << " options" );
+	}
+	mHasNames = cmd.HasFlag( FLAG_FNAMES );
+	string js = cmd.GetValue( mHasNames ? FLAG_FNAMES : FLAG_COLS );
 	BuildJoinSpecs( js );
 
-	IOManager io( cmd );
+	IOManager io( cmd, mHasNames );
 	unsigned int scount = io.InStreamCount();
 	if (  scount < 2 ) {
 		CSVTHROW( "Need at least two input streams" );
@@ -107,7 +116,12 @@ int JoinCommand :: Execute( ALib::CommandLine & cmd ) {
 	CSVRow row;
 	for ( unsigned int i = 0; i < scount - 1; i++ ) {
 		std::unique_ptr <ALib::CSVStreamParser> p( io.CreateStreamParser( i ) );
+		bool resolved = false;
 		while( p->ParseNext( row ) ) {
+			if ( mHasNames && ! resolved ) {
+				ResolveLeft( p.get() );		// LHS names from this stream's header
+				resolved = true;
+			}
 			WriteJoinRows( io, row );
 		}
 	}
@@ -169,12 +183,38 @@ void JoinCommand :: BuildJoinSpecs( const string & js ) {
 		if ( ALib::Split( cl.At(i), ':', cols ) != 2 ) {
 			CSVTHROW( "Invalid join specification: " << cl.At(i) );
 		}
-		int c1 = ALib::ToInteger( cols[0], "Invalid column: " + cols[0] );
-		int c2 = ALib::ToInteger( cols[1], "Invalid column: " + cols[1] );
-		if ( c1 < 1 || c2 < 1 ) {
-			CSVTHROW( "Invalid join specfication: " << cl.At(i) );
+		if ( mHasNames ) {
+			// left:right header names, resolved per stream from the header
+			mNamePairs.push_back( std::make_pair( cols[0], cols[1] ) );
+			mJoinSpecs.push_back( std::make_pair( -1, -1 ) );	// placeholder
 		}
-		mJoinSpecs.push_back( std::make_pair( c1 - 1, c2 - 1 ) );
+		else {
+			int c1 = ALib::ToInteger( cols[0], "Invalid column: " + cols[0] );
+			int c2 = ALib::ToInteger( cols[1], "Invalid column: " + cols[1] );
+			if ( c1 < 1 || c2 < 1 ) {
+				CSVTHROW( "Invalid join specfication: " << cl.At(i) );
+			}
+			mJoinSpecs.push_back( std::make_pair( c1 - 1, c2 - 1 ) );
+		}
+	}
+}
+
+//---------------------------------------------------------------------------
+// Resolve the left/right header names of the join specs to column indexes
+// using the supplied stream's header (case-insensitive).
+//---------------------------------------------------------------------------
+
+void JoinCommand :: ResolveLeft( const ALib::CSVStreamParser * p ) {
+	for ( unsigned int i = 0; i < mNamePairs.size(); i++ ) {
+		mJoinSpecs[i].first =
+			(int) p->ColIndexFromName( mNamePairs[i].first, true );
+	}
+}
+
+void JoinCommand :: ResolveRight( const ALib::CSVStreamParser * p ) {
+	for ( unsigned int i = 0; i < mNamePairs.size(); i++ ) {
+		mJoinSpecs[i].second =
+			(int) p->ColIndexFromName( mNamePairs[i].second, true );
 	}
 }
 
@@ -221,7 +261,12 @@ void JoinCommand :: BuildRowMap( ALib::CSVStreamParser * sp ) {
 	string line;
 	std::unique_ptr <ALib::CSVStreamParser> p( sp );
 	CSVRow row;
+	bool resolved = false;
 	while( p->ParseNext( row ) ) {
+		if ( mHasNames && ! resolved ) {
+			ResolveRight( p.get() );	// RHS names from build stream's header
+			resolved = true;
+		}
 		string key = MakeKey( row, false );
 		CSVRow jrow;
 		for ( unsigned int i = 0; i < row.size(); i++ ) {

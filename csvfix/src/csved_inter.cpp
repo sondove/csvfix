@@ -27,6 +27,13 @@ static RegisterCommand <InterCommand> rc1_(
 );
 
 //----------------------------------------------------------------------------
+// Source-stream prefixes used in field specs (L=first input, R=second)
+//----------------------------------------------------------------------------
+
+const char SRC0 = 'L';
+const char SRC1 = 'R';
+
+//----------------------------------------------------------------------------
 // Help text
 //----------------------------------------------------------------------------
 
@@ -34,7 +41,8 @@ const char * const INTER_HELP = {
 	"interleave fields from two CSV sources"
 	"usage: csvfix inter [flags] [files ...]\n"
 	"where flags are:\n"
-	"  -f fields\tspecify fields to interleave\n"
+	"  -f fields\tspecify fields to interleave by index, e.g. L1,R2\n"
+	"  -fn fields\tspecify fields to interleave by header name, e.g. Lid,Rname\n"
 	"#SMQ,SEP,IBL,IFN,OFL"
 };
 
@@ -44,9 +52,10 @@ const char * const INTER_HELP = {
 
 InterCommand :: InterCommand( const string & name,
 								const string & desc )
-		: Command( name, desc, INTER_HELP ) {
+		: Command( name, desc, INTER_HELP ), mHasNames( false ) {
 
 	AddFlag( ALib::CommandLineFlag( FLAG_COLS, false, 1 ) );
+	AddFlag( ALib::CommandLineFlag( FLAG_FNAMES, false, 1 ) );
 }
 
 //---------------------------------------------------------------------------
@@ -59,7 +68,7 @@ int InterCommand :: Execute( ALib::CommandLine & cmd ) {
 
 	ProcessFlags( cmd );
 
-	IOManager io( cmd );
+	IOManager io( cmd, mHasNames );
 	if ( io.InStreamCount() != 2 ) {
 		CSVTHROW( "Command requires exactly two input streams" );
 	}
@@ -68,10 +77,16 @@ int InterCommand :: Execute( ALib::CommandLine & cmd ) {
 	std::unique_ptr<ALib::CSVStreamParser> p1( io.CreateStreamParser( 1 ) );
 
 	CSVRow row0, row1;
+	bool resolved = false;
 
 	while( p0->ParseNext( row0 ) ) {
 		if ( ! p1->ParseNext( row1 )) {
 			row1.clear();
+		}
+		if ( mHasNames && ! resolved ) {
+			// both headers have now been parsed - resolve names to indexes
+			ResolveNames( p0.get(), p1.get() );
+			resolved = true;
 		}
 		CSVRow out = Interleave( row0, row1 );
 		io.WriteRow( out );
@@ -81,11 +96,39 @@ int InterCommand :: Execute( ALib::CommandLine & cmd ) {
 }
 
 //----------------------------------------------------------------------------
-// Create field index from field spec string
+// Resolve field-name specs (-fn) to indexes using each stream's header.
+// L fields resolve against the first stream, R fields against the second.
 //----------------------------------------------------------------------------
 
-const char SRC0 = 'L';
-const char SRC1 = 'R';
+void InterCommand :: ResolveNames( const ALib::CSVStreamParser * p0,
+									const ALib::CSVStreamParser * p1 ) {
+	mFields.clear();
+	for ( unsigned int i = 0; i < mNameFields.size(); i++ ) {
+		const ALib::CSVStreamParser * p = mNameFields[i].mSrc == 0 ? p0 : p1;
+		unsigned int idx = p->ColIndexFromName( mNameFields[i].mName, true );
+		mFields.push_back( FieldSpec( mNameFields[i].mSrc, idx ) );
+	}
+}
+
+//----------------------------------------------------------------------------
+// Create a field-name spec from a string of the form L<name> or R<name>.
+//----------------------------------------------------------------------------
+
+InterCommand::NameField InterCommand :: MakeNameField( const string & f ) const {
+	if ( f.size() < 2 ) {
+		CSVTHROW( "Invalid field spec " << f );
+	}
+	char src = std::toupper( f[0] );
+	if ( src != SRC0 && src != SRC1 ) {
+		CSVTHROW( "Invalid source spec in field spec " << f );
+	}
+	unsigned int si = src == SRC0 ? 0 : 1;
+	return NameField( si, f.substr( 1 ) );
+}
+
+//----------------------------------------------------------------------------
+// Create field index from field spec string
+//----------------------------------------------------------------------------
 
 InterCommand::FieldSpec InterCommand :: MakeField( const string &  f ) const {
 	if ( f.size() < 2 ) {
@@ -116,12 +159,28 @@ InterCommand::FieldSpec InterCommand :: MakeField( const string &  f ) const {
 
 void InterCommand :: ProcessFlags( const ALib::CommandLine & cmd ) {
 
+	if ( cmd.HasFlag( FLAG_COLS ) && cmd.HasFlag( FLAG_FNAMES ) ) {
+		CSVTHROW( "Cannot specify both " << FLAG_COLS
+					<< " and " << FLAG_FNAMES << " options" );
+	}
+
 	mFields.clear();
-	string fields = cmd.GetValue( FLAG_COLS, "" );
-	if ( ! ALib::IsEmpty( fields ) ) {
-		ALib::CommaList cl( fields );
+	mNameFields.clear();
+	mHasNames = cmd.HasFlag( FLAG_FNAMES );
+
+	if ( mHasNames ) {
+		ALib::CommaList cl( cmd.GetValue( FLAG_FNAMES, "" ) );
 		for ( unsigned int i = 0; i < cl.Size(); i++ ) {
-			mFields.push_back( MakeField( cl.At(i) ) );
+			mNameFields.push_back( MakeNameField( cl.At(i) ) );
+		}
+	}
+	else {
+		string fields = cmd.GetValue( FLAG_COLS, "" );
+		if ( ! ALib::IsEmpty( fields ) ) {
+			ALib::CommaList cl( fields );
+			for ( unsigned int i = 0; i < cl.Size(); i++ ) {
+				mFields.push_back( MakeField( cl.At(i) ) );
+			}
 		}
 	}
 }

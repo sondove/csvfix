@@ -31,7 +31,8 @@ const char * const UNIQUE_HELP = {
 	"removes (or retains only) duplicate records \n"
 	"usage: csvfix unique [flags] [files ...]\n"
 	"where flags are:\n"
-	"  -f fields\tfields to test for uniqueness\n"
+	"  -f fields\tfields to test for uniqueness (by numeric index)\n"
+	"  -fn names\tfields to test for uniqueness (by header name)\n"
 	"  -d\t\toutput only duplicate rows\n"
 	"#SMQ,SEP,IBL,IFN,OFL"
 
@@ -46,6 +47,7 @@ UniqueCommand :: UniqueCommand( const string & name,
 		: Command( name, desc, UNIQUE_HELP) {
 
 	AddFlag( ALib::CommandLineFlag( FLAG_COLS, false, 1 ) );
+	AddFlag( ALib::CommandLineFlag( FLAG_FNAMES, false, 1 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_DUPES, false, 0 ) );
 
 }
@@ -56,11 +58,12 @@ UniqueCommand :: UniqueCommand( const string & name,
 
 int UniqueCommand :: Execute( ALib::CommandLine & cmd ) {
 
-	ALib::CommaList cl( cmd.GetValue( FLAG_COLS, "" ) );
-	CommaListToIndex( cl, mCols );
+	mSpec.Bind( mCols );
+	mSpec.ReadFlags( cmd, "" );
 	mShowDupes = cmd.HasFlag( FLAG_DUPES );
 
-	IOManager io( cmd );
+	IOManager io( cmd, mSpec.HasNames() );
+	mSpec.Wire( io );
 	CSVRow row;
 
 	while( io.ReadCSV( row ) ) {

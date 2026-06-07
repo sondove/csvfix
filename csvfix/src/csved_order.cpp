@@ -39,8 +39,8 @@ const char * const ORDER_HELP = {
 	"  -nc\t\tdo not create fields missing in input\n"
 	"  -xf fields\tspecify all but excluded fields\n"
 	"  -rf fields\tas for -f, but specify fields from end of record\n"
-	"  -fn names\tspecify fields using list of field names\n"
-	"\t\tthis reguires that the input contains field name header\n"
+	"  -fn names\tspecify fields using list of field names (case-insensitive)\n"
+	"\t\tthis reguires that the input contains a field name header\n"
 	"#SMQ,SEP,IBL,IFN,OFL,SKIP,PASS"
 
 };
@@ -62,24 +62,6 @@ OrderCommand ::	OrderCommand( const string & name,
 
 }
 
-//----------------------------------------------------------------------------
-// Get event from IOManager when new input stream is started. Use that to
-// find the current field name ordering, if one exists.
-//----------------------------------------------------------------------------
-
-void OrderCommand :: OnNewCSVStream( const string &,
-										const ALib::CSVStreamParser * p ) {
-	if ( mOrderNames.Size() != 0 ) {
-		mOrder.clear();
-		for ( unsigned int i = 0; i < mOrderNames.Size(); i++ ) {
-			string aname = mOrderNames.At( i );
-			unsigned int col = p->ColIndexFromName( aname );
-			mOrder.push_back( col );
-		}
-
-	}
-}
-
 //---------------------------------------------------------------------------
 // Change ordering for all inputs.
 //---------------------------------------------------------------------------
@@ -89,8 +71,8 @@ int OrderCommand :: Execute( ALib::CommandLine & cmd ) {
 	GetSkipOptions( cmd );
 	ProcessFlags( cmd );
 
-	IOManager io( cmd, mOrderNames.Size() != 0 );
-	io.AddWatcher( * this );
+	IOManager io( cmd, mSpec.HasNames() );
+	mSpec.Wire( io );
 	CSVRow row;
 
 	while( io.ReadCSV( row ) ) {
@@ -178,22 +160,29 @@ void OrderCommand :: ProcessFlags( const ALib::CommandLine & cmd ) {
 
 	mNoCreate = cmd.HasFlag( FLAG_NOCREAT );
 
-	if ( cmd.HasFlag( FLAG_COLS ) ||  cmd.HasFlag( FLAG_EXCLF )) {
+	if ( cmd.HasFlag( FLAG_FNAMES ) ) {
+		// fields by header name - resolved from the header (case-insensitive)
+		mSpec.Bind( mOrder );
+		mSpec.Set( cmd.GetValue( FLAG_FNAMES ) );
+		if ( mSpec.Empty() ) {
+			CSVTHROW( "Need list of names specified by " << FLAG_FNAMES );
+		}
+		if ( ! mSpec.HasNames() ) {
+			mSpec.Resolve( 0 );		// numeric value given to -fn
+		}
+		mExclude = false;
+		mRevOrder = false;
+	}
+	else if ( cmd.HasFlag( FLAG_COLS ) ||  cmd.HasFlag( FLAG_EXCLF )) {
 		mExclude = cmd.HasFlag( FLAG_EXCLF );
 		ALib::CommaList cl( cmd.GetValue( mExclude ? FLAG_EXCLF : FLAG_COLS ) );
-		CommaListToIndex( cl, mOrder);
+		CommaListToIndex( cl, mOrder );
 		mRevOrder = false;
 	}
 	else if ( cmd.HasFlag( FLAG_REVCOLS ) ) {
 		ALib::CommaList cl( cmd.GetValue( FLAG_REVCOLS ) );
 		CommaListToIndex( cl, mOrder);
 		mRevOrder = true;
-	}
-	else if ( cmd.HasFlag( FLAG_FNAMES ) ) {
-		mOrderNames = cmd.GetValue( FLAG_FNAMES );
-		if ( mOrderNames.Size() == 0 ) {
-			CSVTHROW( "Need list of names specified by " << FLAG_FNAMES );
-		}
 	}
 	else {
 		CSVTHROW( "Problem in order comand " )

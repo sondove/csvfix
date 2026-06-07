@@ -92,7 +92,8 @@ class CSVStreamParser : public CSVParser {
 		unsigned int LineNo() const;
 		std::string RawLine() const;
 
-		unsigned int ColIndexFromName(const std::string & name ) const;
+		unsigned int ColIndexFromName(const std::string & name,
+										bool nocase = false ) const;
 
 	private:
 

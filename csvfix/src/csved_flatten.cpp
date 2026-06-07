@@ -44,7 +44,8 @@ const char * const FLAT_HELP = {
 	"where flags are:\n"
 	"  -k key\tspecify list of key fields (default is first field)\n"
 	"  -r \t\tremove key in output (default is retain)\n"
-	"  -f data\tspecify list of data fields (default is all but first)\n"
+	"  -f data\tdata fields by numeric index (default is all but first)\n"
+	"  -fn data\tdata fields by header name\n"
 	"  -me expr\tspecify master record expression\n"
 	"#SMQ,SEP,IBL,IFN,OFL,SKIP"
 };
@@ -67,6 +68,7 @@ FlattenCommand :: FlattenCommand( const string & name,
 		: Command( name, desc, FLAT_HELP ) {
 
 	AddFlag( ALib::CommandLineFlag( FLAG_COLS, false, 1 ) );
+	AddFlag( ALib::CommandLineFlag( FLAG_FNAMES, false, 1 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_KEY, false, 1 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_REMOVE, false, 0 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_HEADEXP, false, 1 ) );
@@ -119,7 +121,8 @@ int FlattenCommand :: Execute( ALib::CommandLine & cmd ) {
 		return MDFlatten( cmd );
 	}
 
-	IOManager io( cmd );
+	IOManager io( cmd, mDataSpec.HasNames() );
+	mDataSpec.Wire( io );
 	CSVRow row;
 
 	mKey = "";
@@ -220,10 +223,10 @@ void FlattenCommand :: ProcessFlags( const ALib::CommandLine & cmd ) {
 		}
 	}
 	else {
-		ALib::CommaList dl( cmd.GetValue( FLAG_COLS, "" ));
-		CommaListToIndex( dl, mDataFields );
+		mDataSpec.Bind( mDataFields );
+		mDataSpec.ReadFlags( cmd, "" );		// data fields: -f or -fn
 		ALib::CommaList kl( cmd.GetValue( FLAG_KEY, "1" ));
-		CommaListToIndex( kl, mKeyFields );
+		CommaListToIndex( kl, mKeyFields );	// key fields: numeric only
 		mKeepKey = ! cmd.HasFlag( FLAG_REMOVE );
 	}
 }

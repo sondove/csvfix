@@ -37,7 +37,8 @@ const char * const EDIT_HELP = {
 	"performs sed-style editing on CSV data\n"
 	"usage: csvfix edit [flags] [file ...]\n"
 	"where flags are:\n"
-	"  -f fields\tfields to apply edits to (default is all fields)\n"
+	"  -f fields\tfields to apply edits to (by numeric index) (default is all fields)\n"
+	"  -fn names\tfields to apply edits to (by header name) (default is all fields)\n"
 	"  -e cmd\tspecify edit command - currently only s(ubstitute) implemented\n"
 	"#ALL,SKIP,PASS"
 };
@@ -52,6 +53,7 @@ EditCommand ::EditCommand( const string & name,
 
 	AddFlag( ALib::CommandLineFlag( FLAG_EDIT, true, 1, true ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_COLS, false, 1, false ) );
+	AddFlag( ALib::CommandLineFlag( FLAG_FNAMES, false, 1 ) );
 }
 
 //---------------------------------------------------------------------------
@@ -68,10 +70,11 @@ int EditCommand :: Execute( ALib::CommandLine & cmd ) {
 		}
 	}
 
-	ALib::CommaList cl( cmd.GetValue( FLAG_COLS, "" ) );
-	CommaListToIndex( cl, mCols );
+	mSpec.Bind( mCols );
+	mSpec.ReadFlags( cmd, "" );
 
-	IOManager io( cmd );
+	IOManager io( cmd, mSpec.HasNames() );
+	mSpec.Wire( io );
 	CSVRow row;
 
 	while( io.ReadCSV( row ) ) {

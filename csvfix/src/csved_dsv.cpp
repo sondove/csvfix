@@ -57,7 +57,8 @@ const char * const DSVW_HELP = {
 	"convert data in CSV format to delimiter-separated variables format\n"
 	"usage: csvfix write_dsv [flags] [files ...]\n"
 	"where flags are:\n"
-	"  -f fields\tspecify list of fields to convert (default is all)\n"
+	"  -f fields\tspecify list of fields to convert (by numeric index) (default is all)\n"
+	"  -fn names\tspecify list of fields to convert (by header name)\n"
 	"  -s sep\tspecify DSV separator character (default is pipe symbol)\n"
 	"#IFN,IBL,OFL,SEP,SKIP"
 };
@@ -109,8 +110,17 @@ void DSVBase ::	ReadFlags( const ALib::CommandLine & cl ) {
 		CSVTHROW( "Bad separator specified by " << FLAG_SEP );
 	}
 
-	string fields = cl.GetValue( FLAG_COLS, "" );
-	CommaListToIndex( ALib::CommaList( fields ), mFields );
+	mSpec.Bind( mFields );
+	mSpec.ReadFlags( cl, "" );
+}
+
+//----------------------------------------------------------------------------
+// Give derived classes access to the field spec so they can wire up header
+// name resolution on the CSV input stream.
+//----------------------------------------------------------------------------
+
+FieldSpec & DSVBase :: Spec() {
+	return mSpec;
 }
 
 //----------------------------------------------------------------------------
@@ -251,6 +261,7 @@ DSVWriteCommand	:: DSVWriteCommand( const string & name,
 									const string & desc )
 		: DSVBase( name, desc, DSVW_HELP ) {
 
+	AddFlag( ALib::CommandLineFlag( FLAG_FNAMES, false, 1 ) );
 }
 
 //---------------------------------------------------------------------------
@@ -261,7 +272,8 @@ int DSVWriteCommand :: Execute( ALib::CommandLine & cmd ) {
 
 	GetSkipOptions( cmd );
 	ReadFlags( cmd );
-	IOManager io( cmd );
+	IOManager io( cmd, Spec().HasNames() );
+	Spec().Wire( io );
 	CSVRow row;
 
 	while( io.ReadCSV( row ) ) {

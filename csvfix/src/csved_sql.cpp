@@ -46,7 +46,8 @@ const char * const INS_HELP = {
 	"generates SQL INSERT statements from  CSV data\n"
 	"usage: csvfix sql_insert [flags] [file ...]\n"
 	"where flags are:\n"
-	"  -f fields\tfields to use to generate the SQL statement\n"
+	"  -f fields\tfields to use to generate the SQL statement (index:colname)\n"
+	"  -fn fields\tas -f, but specify the CSV field by header name (name:colname)\n"
 	"  -t table\tname of table to insert into\n"
 	"  -s sep\tspecifies statement separator (default ';')\n"
 	"  -nq fields\tspecifies fields not to quote on output\n"
@@ -59,8 +60,10 @@ const char * const UPD_HELP = {
 	"generates SQL UPDATE statements from  CSV data\n"
 	"usage: csvfix sql_update [flags] [file ...]\n"
 	"where flags are:\n"
-	"  -f fields\tfields to use to generate the SQL SET clause\n"
-	"  -w fields\tfields to use to generate the SQL WHERE clause\n"
+	"  -f fields\tfields to use to generate the SQL SET clause (index:colname)\n"
+	"  -fn fields\tas -f, but specify the CSV field by header name (name:colname)\n"
+	"  -w fields\tfields to use to generate the SQL WHERE clause (index:colname)\n"
+	"  -wn fields\tas -w, but specify the CSV field by header name (name:colname)\n"
 	"  -t table\tname of table to update\n"
 	"  -s sep\tspecifies statement separator (default ';')\n"
 	"  -nq fields\tspecifies fields not to quote on output\n"
@@ -73,7 +76,8 @@ const char * const DEL_HELP = {
 	"generates SQL DELETE statements from  CSV data\n"
 	"usage: csvfix sql_delete [flags] [file ...]\n"
 	"where flags are:\n"
-	"  -w fields\tfields to use to generate the SQL WHERE clause\n"
+	"  -w fields\tfields to use to generate the SQL WHERE clause (index:colname)\n"
+	"  -wn fields\tas -w, but specify the CSV field by header name (name:colname)\n"
 	"  -t table\tname of table to update\n"
 	"  -s sep\tspecifies statement separator (default ';')\n"
 	"  -nq fields\tspecifies fields not to quote on output\n"
@@ -89,7 +93,7 @@ const char * const DEL_HELP = {
 SQLCommand :: SQLCommand( const string & name,
 							const string & desc,
 							const string & help )
-	: Command( name, desc, help ), mQuoteNulls(false) {
+	: Command( name, desc, help ), mQuoteNulls(false), mHasNames(false) {
 	AddFlag( ALib::CommandLineFlag( FLAG_NOQUOTE, false, 1 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_QNULLS, false, 0 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_TABLE, true, 1 ) );
@@ -166,11 +170,42 @@ string SQLCommand :: EmptyToNull( const string & f ) const {
 //---------------------------------------------------------------------------
 
 void SQLCommand :: BuildDataCols( const ALib::CommandLine & cmd ) {
-	BuildCols( cmd, FLAG_COLS, mDataCols );
+	BuildCols( cmd, FLAG_COLS, FLAG_FNAMES, mDataCols );
 }
 
 void SQLCommand :: BuildWhereCols( const ALib::CommandLine & cmd ) {
-	BuildCols( cmd, FLAG_WHERE, mWhereCols );
+	BuildCols( cmd, FLAG_WHERE, FLAG_WNAMES, mWhereCols );
+}
+
+//---------------------------------------------------------------------------
+// Resolve field-name column specs against the input header (case-insensitive)
+// when a new input stream is opened.
+//---------------------------------------------------------------------------
+
+void SQLCommand :: OnNewCSVStream( const std::string &,
+									const ALib::CSVStreamParser * p ) {
+	for ( unsigned int i = 0; i < mDataCols.size(); i++ ) {
+		if ( ! mDataCols[i].mFieldName.empty() ) {
+			mDataCols[i].mField =
+				p->ColIndexFromName( mDataCols[i].mFieldName, true );
+		}
+	}
+	for ( unsigned int i = 0; i < mWhereCols.size(); i++ ) {
+		if ( ! mWhereCols[i].mFieldName.empty() ) {
+			mWhereCols[i].mField =
+				p->ColIndexFromName( mWhereCols[i].mFieldName, true );
+		}
+	}
+}
+
+//---------------------------------------------------------------------------
+// Register as a header-name watcher if any field was specified by name.
+//---------------------------------------------------------------------------
+
+void SQLCommand :: WireNames( IOManager & io ) {
+	if ( mHasNames ) {
+		io.AddWatcher( * this );
+	}
 }
 
 //---------------------------------------------------------------------------
@@ -184,16 +219,27 @@ void SQLCommand :: BuildWhereCols( const ALib::CommandLine & cmd ) {
 
 void SQLCommand :: BuildCols( const ALib::CommandLine & cmd,
 								const string & flag,
+								const string & nameFlag,
 								SQLColSpec::Vec & cols ) {
 
 	bool havenames = false;
 	cols.clear();
 
-	if ( cmd.FlagCount( flag ) > 1 ) {
-		CSVTHROW( "Need fields specified by single " << flag << " flag" );
+	if ( cmd.HasFlag( flag ) && cmd.HasFlag( nameFlag ) ) {
+		CSVTHROW( "Cannot specify both " << flag
+					<< " and " << nameFlag << " options" );
 	}
 
-	ALib::CommaList cl( cmd.GetValue( flag ) );
+	// when byName is set, the field part of each spec is a CSV header name
+	// rather than a numeric index, and is resolved once the header is read.
+	bool byName = cmd.HasFlag( nameFlag );
+	const string & useFlag = byName ? nameFlag : flag;
+
+	if ( cmd.FlagCount( useFlag ) > 1 ) {
+		CSVTHROW( "Need fields specified by single " << useFlag << " flag" );
+	}
+
+	ALib::CommaList cl( cmd.GetValue( useFlag ) );
 
 	for ( unsigned int i = 0; i < cl.Size(); i++ ) {
 
@@ -207,15 +253,6 @@ void SQLCommand :: BuildCols( const ALib::CommandLine & cmd,
 			CSVTHROW( "Empty column specification" );
 		}
 
-		if ( ! ALib::IsInteger( tmp[0] ) ) {
-			CSVTHROW( "Field index must be integer in "  << cl.At(i) );
-		}
-
-		int icol = ALib::ToInteger( tmp[0] );
-		if ( icol <= 0 ) {
-			CSVTHROW( "Field index must be greater than xero in " << cl.At(i) );
-		}
-
 		if ( tmp.size() == 1 && havenames ) {
 			CSVTHROW( "Must specify all column names" );
 		}
@@ -224,7 +261,24 @@ void SQLCommand :: BuildCols( const ALib::CommandLine & cmd,
 
 		string colname = tmp.size() == 2 ? tmp[1] : string("");
 
-		cols.push_back( SQLColSpec( icol - 1, colname ) );
+		if ( byName ) {
+			// field part is a header name, resolved later (mField is a
+			// placeholder until then)
+			mHasNames = true;
+			cols.push_back( SQLColSpec( 0, colname, tmp[0] ) );
+		}
+		else {
+			if ( ! ALib::IsInteger( tmp[0] ) ) {
+				CSVTHROW( "Field index must be integer in " << cl.At(i)
+							<< " (use " << nameFlag << " for header names)" );
+			}
+			int icol = ALib::ToInteger( tmp[0] );
+			if ( icol <= 0 ) {
+				CSVTHROW( "Field index must be greater than xero in "
+							<< cl.At(i) );
+			}
+			cols.push_back( SQLColSpec( icol - 1, colname ) );
+		}
 	}
 }
 
@@ -308,7 +362,8 @@ SQLInsertCommand ::	SQLInsertCommand( const string & name,
 										const string & desc )
 		: SQLCommand( name, desc, INS_HELP ), mHaveColNames( false ) {
 
-	AddFlag( ALib::CommandLineFlag( FLAG_COLS, true, 1 ) );
+	AddFlag( ALib::CommandLineFlag( FLAG_COLS, false, 1 ) );
+	AddFlag( ALib::CommandLineFlag( FLAG_FNAMES, false, 1 ) );
 }
 
 //---------------------------------------------------------------------------
@@ -323,7 +378,8 @@ int SQLInsertCommand ::	Execute( ALib::CommandLine & cmd ) {
 	BuildDataCols( cmd );
 	MustHaveDataNames();	// need col names too
 
-	IOManager io( cmd );
+	IOManager io( cmd, HasNames() );
+	WireNames( io );
 	CSVRow row;
 
 	while( io.ReadCSV( row ) ) {
@@ -424,8 +480,10 @@ SQLUpdateCommand ::	SQLUpdateCommand( const string & name,
 										const string & desc )
 		: SQLCommand( name, desc, UPD_HELP ) {
 
-	AddFlag( ALib::CommandLineFlag( FLAG_COLS, true, 1 ) );
-	AddFlag( ALib::CommandLineFlag( FLAG_WHERE, true, 1 ) );
+	AddFlag( ALib::CommandLineFlag( FLAG_COLS, false, 1 ) );
+	AddFlag( ALib::CommandLineFlag( FLAG_FNAMES, false, 1 ) );
+	AddFlag( ALib::CommandLineFlag( FLAG_WHERE, false, 1 ) );
+	AddFlag( ALib::CommandLineFlag( FLAG_WNAMES, false, 1 ) );
 }
 
 //---------------------------------------------------------------------------
@@ -442,7 +500,8 @@ int SQLUpdateCommand ::	Execute( ALib::CommandLine & cmd ) {
 	MustHaveDataNames();
 	MustHaveWhereNames();
 
-	IOManager io( cmd );
+	IOManager io( cmd, HasNames() );
+	WireNames( io );
 	CSVRow row;
 
 	while( io.ReadCSV( row ) ) {
@@ -516,7 +575,8 @@ SQLDeleteCommand :: SQLDeleteCommand( const string & name,
 										const string & desc )
 	: SQLCommand( name, desc, DEL_HELP ) {
 
-	AddFlag( ALib::CommandLineFlag( FLAG_WHERE, true, 1 ) );
+	AddFlag( ALib::CommandLineFlag( FLAG_WHERE, false, 1 ) );
+	AddFlag( ALib::CommandLineFlag( FLAG_WNAMES, false, 1 ) );
 }
 
 //---------------------------------------------------------------------------
@@ -529,7 +589,8 @@ int SQLDeleteCommand :: Execute( ALib::CommandLine & cmd ) {
 	BuildWhereCols( cmd );
 	MustHaveWhereNames();
 
-	IOManager io( cmd );
+	IOManager io( cmd, HasNames() );
+	WireNames( io );
 	CSVRow row;
 
 	while( io.ReadCSV( row ) ) {

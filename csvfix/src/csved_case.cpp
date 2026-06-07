@@ -45,6 +45,7 @@ CaseBase :: CaseBase( const std::string & name,
 		: Command( name, desc ) {
 
 	AddFlag( ALib::CommandLineFlag( FLAG_COLS, false, 1 ) );
+	AddFlag( ALib::CommandLineFlag( FLAG_FNAMES, false, 1 ) );
 
 }
 
@@ -54,15 +55,15 @@ CaseBase :: CaseBase( const std::string & name,
 
 int CaseBase :: Execute( ALib::CommandLine & cmd ) {
 
-	ALib::CommaList cols( cmd.GetValue( FLAG_COLS ) );
-	std::vector <unsigned int> colindex;
-	CommaListToIndex( cols, colindex );
+	mSpec.Bind( mColIndex );
+	mSpec.ReadFlags( cmd, "" );
 
-	IOManager io( cmd );
+	IOManager io( cmd, mSpec.HasNames() );
+	mSpec.Wire( io );
 	CSVRow row;
 
 	while( io.ReadCSV( row ) ) {
-		ProcessRow( row, colindex );
+		ProcessRow( row, mColIndex );
 		io.WriteRow( row );
 	}
 
@@ -90,7 +91,8 @@ string CaseBase :: Help() const {
 	string s = Explain();
 	s +=
 		"where flags are:\n"
-		"  -f fields\tlist of fields to convert (default is all)\n"
+		"  -f fields\tlist of fields to convert (default is all) (by numeric index)\n"
+		"  -fn names\tlist of fields to convert (default is all) (by header name)\n"
 		"  -ibl\t\tignore blank input lines\n"
 		"  -ifn\t\tignore field name record\n"
 		"  -smq\t\tuse smart quotes on output\n"

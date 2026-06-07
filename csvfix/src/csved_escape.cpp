@@ -41,7 +41,8 @@ const char * const ESC_HELP = {
 	"performs escaping of special characters\n"
 	"usage: csvfix escape [flags] [file ...]\n"
 	"where flags are:\n"
-	"  -f fields\tfields to apply escaping to (default is all fields)\n"
+	"  -f fields\tfields to apply escaping to (by numeric index) (default is all fields)\n"
+	"  -fn names\tfields to apply escaping to (by header name) (default is all fields)\n"
 	"  -s chars\tlist of characters to be escaped\n"
 	"  -e esc\tstring to use for escaping (default is backslash)\n"
 	"  -sql\t\tperform SQL single quote escaping\n"
@@ -61,6 +62,7 @@ EscCommand :: EscCommand( const string & name,
 	AddFlag( ALib::CommandLineFlag( FLAG_CHARS, false, 1 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_ESC, false, 1 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_COLS, false, 1 ) );
+	AddFlag( ALib::CommandLineFlag( FLAG_FNAMES, false, 1 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_ESCOFF, false, 0 ) );
 
 }
@@ -99,7 +101,8 @@ int EscCommand ::	Execute( ALib::CommandLine & cmd ) {
 
 	GetColumns( cmd );
 
-	IOManager io( cmd );
+	IOManager io( cmd, mSpec.HasNames() );
+	mSpec.Wire( io );
 	CSVRow row;
 
 	while( io.ReadCSV( row ) ) {
@@ -121,11 +124,8 @@ int EscCommand ::	Execute( ALib::CommandLine & cmd ) {
 
 void EscCommand :: GetColumns( const ALib::CommandLine & cmd ) {
 	mCols.clear();
-	string cs = cmd.GetValue( FLAG_COLS );
-	if ( ! ALib::IsEmpty( cs ) ) {
-		ALib::CommaList cl( cs );
-		CommaListToIndex( cl, mCols );
-	}
+	mSpec.Bind( mCols );
+	mSpec.ReadFlags( cmd, "" );
 }
 
 //---------------------------------------------------------------------------

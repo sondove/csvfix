@@ -32,6 +32,7 @@ class RemoveNewlineCommand : public Command {
 
 		std::string mSep;
 		FieldList mFields;
+		FieldSpec mSpec;
 		bool mExcludeAfter;
 		void ExpandSep(void);
 };

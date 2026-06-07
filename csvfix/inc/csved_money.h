@@ -11,6 +11,7 @@
 
 #include "a_base.h"
 #include "csved_command.h"
+#include "csved_util.h"
 
 namespace CSVED {
 
@@ -31,6 +32,7 @@ class MoneyCommand : public Command {
 		std::string FormatValue( const std::string & v ) const;
 
 		FieldList mFields;
+		FieldSpec mSpec;
 		char mDecimalPoint, mThouSep;
 		std::string mSymbol, mPlus, mMinus;
 		bool mReplace;

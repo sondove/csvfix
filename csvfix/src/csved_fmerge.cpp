@@ -37,7 +37,8 @@ const char * const FMERGE_HELP = {
 	"merge multiple sorted CSV files into single output\n"
 	"usage: csvfix fmerge [flags] file ...\n"
 	"where flags are:\n"
-	"  -f fields\tfields to compare when merging (default all)\n"
+	"  -f fields\tfields to compare when merging, by numeric index (default all)\n"
+	"  -fn names\tfields to compare when merging, by header name\n"
 	"#ALL"
 };
 
@@ -49,6 +50,7 @@ FMergeCommand :: FMergeCommand( const string & name, const string & desc )
 				: Command( name, desc, FMERGE_HELP ) {
 
 	AddFlag( ALib::CommandLineFlag( FLAG_COLS, false, 1 ) );
+	AddFlag( ALib::CommandLineFlag( FLAG_FNAMES, false, 1 ) );
 
 }
 
@@ -59,8 +61,8 @@ FMergeCommand :: FMergeCommand( const string & name, const string & desc )
 int FMergeCommand :: Execute( ALib::CommandLine & cmd ) {
 
 	ProcessFlags( cmd );
-	IOManager io( cmd );
-	MinFinder mf( io, mFields );
+	IOManager io( cmd, mSpec.HasNames() );
+	MinFinder mf( io, mFields, & mSpec );
 
 	CSVRow row;
 
@@ -77,17 +79,16 @@ int FMergeCommand :: Execute( ALib::CommandLine & cmd ) {
 
 void FMergeCommand :: ProcessFlags( ALib::CommandLine & cmd ) {
 
-	if ( cmd.HasFlag( FLAG_COLS ) ) {
-		ALib::CommaList cl( cmd.GetValue( FLAG_COLS ) );
-		CommaListToIndex( cl, mFields );
-	}
+	mSpec.Bind( mFields );
+	mSpec.ReadFlags( cmd, "" );
 }
 
 //----------------------------------------------------------------------------
 // Create row getters for all input sources
 //----------------------------------------------------------------------------
 
-MinFinder :: MinFinder( IOManager & io, const FieldList & f ) : mFields( f ){
+MinFinder :: MinFinder( IOManager & io, const FieldList & f, FieldSpec * spec )
+				: mFields( f ), mSpec( spec ) {
 
 	for ( unsigned int i = 0; i < io.InStreamCount(); i++ ) {
 		mGetters.push_back( new RowGetter( io.CreateStreamParser( i ) ));
@@ -113,6 +114,18 @@ bool MinFinder :: FindMin( CSVRow & rmin ) {
 
 	CSVRow row;
 	int gi = -1;
+
+	// if fields were specified by header name, resolve them now using the
+	// first stream that yields a row (its header has been parsed by then).
+	if ( mSpec != 0 && mSpec->HasNames() ) {
+		for ( unsigned int i = 0; i < mGetters.size(); i++ ) {
+			CSVRow tmp;
+			if ( mGetters[i]->Get( tmp ) ) {
+				mSpec->ResolveOnce( mGetters[i]->Parser() );
+				break;
+			}
+		}
+	}
 
 	for ( unsigned int i = 0; i < mGetters.size(); i++ ) {
 		bool ok = mGetters[i]->Get( row );

@@ -22,7 +22,7 @@ namespace CSVED {
 // usual Command stuff.
 //----------------------------------------------------------------------------
 
-class OrderCommand : public Command, public IOWatcher {
+class OrderCommand : public Command {
 
 	public:
 
@@ -30,9 +30,6 @@ class OrderCommand : public Command, public IOWatcher {
 						const std::string & desc );
 
 		int Execute( ALib::CommandLine & cmd );
-
-		void OnNewCSVStream( const std::string & filename,
-							 const ALib::CSVStreamParser * p );
 
 
 	private:
@@ -43,7 +40,7 @@ class OrderCommand : public Command, public IOWatcher {
 		void ExcludeFields( CSVRow & row );
 
 		FieldList mOrder;
-		ALib::CommaList mOrderNames;
+		FieldSpec mSpec;
 		bool mRevOrder;
 		bool mExclude;
 		bool mNoCreate;

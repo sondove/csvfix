@@ -12,6 +12,7 @@
 #include "a_base.h"
 #include "a_regex.h"
 #include "csved_command.h"
+#include "csved_ioman.h"
 #include <vector>
 
 namespace CSVED {
@@ -29,7 +30,7 @@ class SplitBase : public Command {
 						const std::string & help );
 
 		unsigned int Field() const {
-			return mField;
+			return mFields.empty() ? 0 : mFields[0];
 		}
 
 		bool Keep() const {
@@ -39,9 +40,11 @@ class SplitBase : public Command {
 	protected:
 
 		void GetCommonFlags( ALib::CommandLine & cl );
+		void SetupFieldIO( IOManager & io );
 		void Insert( CSVRow & row, const CSVRow & split );
 
-		unsigned int mField;
+		FieldList mFields;
+		FieldSpec mSpec;
 		bool mKeep;
 };
 

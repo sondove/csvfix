@@ -39,7 +39,8 @@ const char * const MONEY_HELP = {
 	"format fields as money/currency values\n"
 	"usage: csvfix money [flags] [file ...]\n"
 	"where flags are:\n"
-	"  -f fields\tfields to apply format to - default is all fields\n"
+	"  -f fields\tfields to apply format to (by numeric index)\n"
+	"  -fn names\tfields to apply format to (by header name)\n"
 	"  -dp chr\tuse character chr as decimal point symbol - default is full-stop\n"
 	"  -ts chr\tuse character chr as thousands separator - default is comma\n"
 	"  -cs sym\tuse string sym as currency symbol - default is none\n"
@@ -63,6 +64,7 @@ MoneyCommand :: MoneyCommand( const string & name,
 	AddFlag( ALib::CommandLineFlag( FLAG_DPOINT, false, 1 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_KSEP, false, 1 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_COLS, false, 1 ) );
+	AddFlag( ALib::CommandLineFlag( FLAG_FNAMES, false, 1 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_CURSYM, false, 1 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_REPLACE, false, 0 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_PLUS, false, 1 ) );
@@ -80,7 +82,8 @@ int MoneyCommand :: Execute( ALib::CommandLine & cmd ) {
 
 	GetSkipOptions( cmd );
 	ProcessFlags( cmd );
-	IOManager io( cmd );
+	IOManager io( cmd, mSpec.HasNames() );
+	mSpec.Wire( io );
 	CSVRow row;
 
 	while( io.ReadCSV( row ) ) {
@@ -120,7 +123,6 @@ void MoneyCommand :: ProcessFlags( ALib::CommandLine & cmd ) {
 	mSymbol = cmd.GetValue( FLAG_CURSYM, "" );
 	mPlus = cmd.GetValue( FLAG_PLUS, "" );
 	mMinus = cmd.GetValue( FLAG_MINUS, "-" );
-	string fields = cmd.GetValue( FLAG_COLS, "" );
 	string dp = cmd.GetValue( FLAG_DPOINT, "." );
 	if ( dp.size() != 1 ) {
 		CSVTHROW( "Invalid decimal point value" );
@@ -132,9 +134,8 @@ void MoneyCommand :: ProcessFlags( ALib::CommandLine & cmd ) {
 	mDecimalPoint = dp[0];
 	mThouSep = ts == "" ? 0 : ts[0];
 
-	if ( ! fields.empty() ) {
-		CommaListToIndex( ALib::CommaList( fields ), mFields );
-	}
+	mSpec.Bind( mFields );
+	mSpec.ReadFlags( cmd, "" );
 	mReplace = cmd.HasFlag( FLAG_REPLACE );
 
 	string ws = cmd.GetValue( FLAG_WIDTH, "0" );

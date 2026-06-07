@@ -34,7 +34,8 @@ const char * const MERGE_HELP = {
 	"merges multiple CSV fields into a single field\n"
 	"usage: csvfix merge [flags] [files ...]\n"
 	"where flags are:\n"
-	"  -f fields\tspecify fields to merge (default is to merge all fields)\n"
+	"  -f fields\tspecify fields to merge (by numeric index) (default is to merge all fields)\n"
+	"  -fn names\tspecify fields to merge (by header name)\n"
 	"  -s sep\tcharacter(s) to use as separator\n"
 	"  -p pos\tposition to insert merged field in output\n"
 	"  -k\t\tretain original merged fields in output\n"
@@ -50,6 +51,7 @@ MergeCommand ::	MergeCommand( const string & name,
 		: Command( name, desc, MERGE_HELP ) {
 
 	AddFlag( ALib::CommandLineFlag( FLAG_COLS, false, 1 ) );
+	AddFlag( ALib::CommandLineFlag( FLAG_FNAMES, false, 1 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_POS, false, 1 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_SEP, false, 1 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_KEEP, false, 0 ) );
@@ -64,7 +66,8 @@ int MergeCommand :: Execute( ALib::CommandLine & cmd ) {
 	GetSkipOptions( cmd );
 	ProcessFlags( cmd );
 
-	IOManager io( cmd );
+	IOManager io( cmd, mSpec.HasNames() );
+	mSpec.Wire( io );
 	CSVRow row;
 
 	while( io.ReadCSV( row ) ) {
@@ -185,14 +188,11 @@ static string ExpandSep( const string & sep ) {
 void MergeCommand :: ProcessFlags( const ALib::CommandLine & cmd ) {
 
 
-	if ( cmd.HasFlag( FLAG_COLS ) ) {
-		string s = cmd.GetValue( FLAG_COLS );
-		ALib::CommaList cl( s );
-		CommaListToIndex( cl, mCols );
-		if ( mCols.size() <= 1 ) {
-			CSVTHROW( "Need to specify two or more fields with "
-						<< FLAG_COLS << " flag" );
-		}
+	mSpec.Bind( mCols );
+	mSpec.ReadFlags( cmd );
+	if ( ! mSpec.HasNames() && mCols.size() != 0 && mCols.size() <= 1 ) {
+		CSVTHROW( "Need to specify two or more fields with "
+					<< FLAG_COLS << " flag" );
 	}
 
 	mSep = ExpandSep( cmd.GetValue( FLAG_SEP, " ") );

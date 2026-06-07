@@ -38,7 +38,8 @@ const char * const SHUFFLE_HELP = {
 	"where flags are:\n"
 	"  -n count\tonly output the first 'count' rows after shuffle\n"
 	"  -rs seed\tspecify seed to use for random number generator\n"
-	"  -f fields\tshuffle specified fields instead of rows\n"
+	"  -f fields\tshuffle specified fields instead of rows (by numeric index)\n"
+	"  -fn names\tshuffle specified fields, by header name\n"
 	"#SMQ,SEP,IBL,IFN,OFL"
 };
 
@@ -53,6 +54,7 @@ ShuffleCommand ::ShuffleCommand( const string & name,
 	AddFlag( ALib::CommandLineFlag( FLAG_NUM, false, 1 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_RSEED, false, 1 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_COLS, false, 1 ) );
+	AddFlag( ALib::CommandLineFlag( FLAG_FNAMES, false, 1 ) );
 }
 
 //----------------------------------------------------------------------------
@@ -63,7 +65,8 @@ int ShuffleCommand :: Execute( ALib::CommandLine & cmd ) {
 
 	ProcessFlags( cmd );
 	mRows.clear();
-	IOManager io( cmd );
+	IOManager io( cmd, mSpec.HasNames() );
+	mSpec.Wire( io );
 	CSVRow row;
 
 	if ( mFields.size() == 0 ) {
@@ -103,10 +106,8 @@ void ShuffleCommand :: ProcessFlags( const ALib::CommandLine & cmd ) {
 	}
 	int n = ALib::ToInteger( sr );
 	mSeed = n < 0 ? std::time(0) : n;
-	if ( cmd.HasFlag( FLAG_COLS ) ) {
-		ALib::CommaList cl( cmd.GetValue( FLAG_COLS ) );
-		CommaListToIndex( cl, mFields );
-	}
+	mSpec.Bind( mFields );
+	mSpec.ReadFlags( cmd, "" );
 }
 
 //----------------------------------------------------------------------------

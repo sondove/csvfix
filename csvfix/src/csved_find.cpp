@@ -43,7 +43,8 @@ const char * const FIND_HELP = {
 	"perform grep-like search using regular expressions on CSV data\n"
 	"usage: csvfix find  [flags] [file ...]\n"
 	"where flags are:\n"
-	"  -f fields\tfields to search\n"
+	"  -f fields\tfields to search (by numeric index)\n"
+	"  -fn names\tfields to search (by header name)\n"
 	"  -e expr\tregex to search for - multiple  -e flags are allowed\n"
 	"  -s expr\tas for -e, but don't treat expr as regex\n"
 	"  -fc count\tspecify field count to find\n"
@@ -59,7 +60,8 @@ const char * const REMOVE_HELP = {
 	"perform grep-like search on CSV data, but return non-matching records\n"
 	"usage: csvfix remove [flags] [file ...]\n"
 	"where flags are:\n"
-	"  -f fields\tfields to search\n"
+	"  -f fields\tfields to search (by numeric index)\n"
+	"  -fn names\tfields to search (by header name)\n"
 	"  -e expr\tregex to search for - multiple  -e flags are allowed\n"
 	"  -s expr\tas for -e, but don't treat expr as regex\n"
 	"  -fc count\tspecify field count to remove\n"
@@ -83,6 +85,7 @@ FindCommand :: FindCommand( const string & name,
 			mMinFields( 0 ), mMaxFields( INT_MAX ) {
 
 	AddFlag( ALib::CommandLineFlag( FLAG_COLS, false, 1 ) );
+	AddFlag( ALib::CommandLineFlag( FLAG_FNAMES, false, 1 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_EXPR, false, 1, true ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_STR, false, 1, true ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_RANGE, false, 1 ) );
@@ -130,8 +133,8 @@ string FindCommand :: Help() const {
 int FindCommand :: Execute( ALib::CommandLine & cmd ) {
 
 	Clear();
-	ALib::CommaList cl( cmd.GetValue( FLAG_COLS ) );
-	CommaListToIndex( cl, mColIndex );
+	mSpec.Bind( mColIndex );
+	mSpec.ReadFlags( cmd, "" );
 	CreateRegExes( cmd );
 	CreateRanges( cmd );
 	CreateLengths( cmd );
@@ -160,7 +163,8 @@ int FindCommand :: Execute( ALib::CommandLine & cmd ) {
 
 	mCountOnly = cmd.HasFlag( FLAG_NUM );
 
-	IOManager io( cmd );
+	IOManager io( cmd, mSpec.HasNames() );
+	mSpec.Wire( io );
 	CSVRow row;
 
 	unsigned int count = 0;

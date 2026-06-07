@@ -11,6 +11,7 @@
 
 #include "a_base.h"
 #include "csved_command.h"
+#include "csved_util.h"
 #include <map>
 
 namespace CSVED {
@@ -48,6 +49,7 @@ class UniqueCommand : public Command {
 		typedef std::map <std::string,RowInfo> MapType;
 		MapType mMap;
 		std::vector <unsigned int> mCols;
+		FieldSpec mSpec;
 
 };
 

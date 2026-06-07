@@ -14,6 +14,7 @@
 
 #include "csved_command.h"
 #include "csved_types.h"
+#include "csved_util.h"
 
 namespace CSVED {
 
@@ -35,6 +36,7 @@ class ExcludeCommand : public Command {
 		bool EvalExprOnRow( IOManager & io, const CSVRow & r );
 
 		FieldList mFields;
+		FieldSpec mSpec;
 		ALib::Expression mExpr;
 		bool mReverse;
 };

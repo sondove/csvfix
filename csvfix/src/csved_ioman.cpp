@@ -21,14 +21,6 @@ using std::string;
 
 namespace CSVED {
 
-//----------------------------------------------------------------------------
-// IOWatcher is used to monitor various changes in the IOManager
-//----------------------------------------------------------------------------
-
-IOWatcher :: ~IOWatcher() {
-	// nothing
-}
-
 //---------------------------------------------------------------------------
 // Create manager opening all streams to check we can, rather than fail
 // after lengthy processing. Handle command line flags that don't belong
@@ -143,6 +135,17 @@ void IOManager :: AddWatcher( IOWatcher & w ) {
 	mWatchers.push_back( & w );
 }
 
+//----------------------------------------------------------------------------
+// Force the first input record to be treated as a field name header and
+// skipped (as if -ifn had been specified). Used by commands when a -f field
+// specification refers to fields by header name. Must be called before the
+// first call to ReadCSV(), as the stream parser is created lazily there.
+//----------------------------------------------------------------------------
+
+void IOManager :: IgnoreColNames( bool b ) {
+	mSkipColNames = b;
+}
+
 //---------------------------------------------------------------------------
 // Delete all stored input streams (except standard input and output)
 //---------------------------------------------------------------------------
@@ -214,7 +217,7 @@ ALib::CSVStreamParser * IOManager :: CreateStreamParser( unsigned int in ) {
 									In( in ),
 									mIgnoreBlankLines,
 									mSkipColNames,
-									false,
+									mMakeColMap,
 									mCSVSep
 								);
 	return p;

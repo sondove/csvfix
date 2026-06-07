@@ -45,7 +45,8 @@ const char * const SPLIT_HELP = {
 	"splits data into multiple files depending on CSV field contents\n"
 	"usage: csvfix file_split  [flags] [file ...]\n"
 	"where flags are:\n"
-	"  -f fields \tfields to use as basis for split\n"
+	"  -f fields \tfields to use as basis for split (by numeric index)\n"
+	"  -fn names\tfields to use as basis for split (by header name)\n"
 	"  -fd dir\tdirectory to place output files in  (default is current)\n"
 	"  -fp pre\tprefix to use to generate filenames(default is file_)\n"
 	"  -fx ext\textension to use to generate filenames(default is csv)\n"
@@ -61,7 +62,8 @@ FileSplitCommand :: FileSplitCommand( const string & name,
 							const string & desc )
 			: Command( name, desc, SPLIT_HELP), mUseFieldNames( false ) {
 
-	AddFlag( ALib::CommandLineFlag( FLAG_COLS, true, 1 ) );
+	AddFlag( ALib::CommandLineFlag( FLAG_COLS, false, 1 ) );
+	AddFlag( ALib::CommandLineFlag( FLAG_FNAMES, false, 1 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_FSPRE, false, 1 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_FSDIR, false, 1 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_FSEXT, false, 1 ) );
@@ -79,7 +81,8 @@ int FileSplitCommand :: Execute( ALib::CommandLine & cmd ) {
 	GetSkipOptions( cmd );
 	ProcessFlags( cmd );
 
-	IOManager io( cmd );
+	IOManager io( cmd, mSpec.HasNames() );
+	mSpec.Wire( io );
 	CSVRow row;
 
 	while( io.ReadCSV( row ) ) {
@@ -181,8 +184,12 @@ void FileSplitCommand :: ProcessFlags( ALib::CommandLine & cmd ) {
 	mDir = cmd.GetValue( FLAG_FSDIR, DEF_DIR );
 	mFilePrefix = cmd.GetValue( FLAG_FSPRE, DEF_PREF );
 	mFileExt= cmd.GetValue( FLAG_FSEXT, DEF_EXT );
-	ALib::CommaList cl( cmd.GetValue( FLAG_COLS ) );
-	CommaListToIndex( cl, mColIndex );
+	mSpec.Bind( mColIndex );
+	mSpec.ReadFlags( cmd );
+	if ( mSpec.Empty() ) {
+		CSVTHROW( "Need fields specified by " << FLAG_COLS
+					<< " or " << FLAG_FNAMES << " flag" );
+	}
 	mUseFieldNames = cmd.HasFlag( FLAG_USEFLD );
 }
 

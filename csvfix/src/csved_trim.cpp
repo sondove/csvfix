@@ -33,7 +33,8 @@ const char * const TRIM_HELP = {
 	"trim leading & trailing spaces, or truncate to width\n"
 	"usage: csvfix trim  [flags] [file ...]\n"
 	"where flags are:\n"
-	"  -f fields\tfields to trim (default is all)\n"
+	"  -f fields\tfields to trim (by numeric index)\n"
+	"  -fn names\tfields to trim (by header name)\n"
 	"  -l\t\ttrim leading whitespace\n"
 	"  -t\t\ttrim trailing whitespace\n"
 	"  -a\t\tremove all whitespace\n"
@@ -51,6 +52,7 @@ TrimCommand ::	TrimCommand( const string & name,
 		: Command( name, desc, TRIM_HELP ) {
 
 	AddFlag( ALib::CommandLineFlag( FLAG_COLS, false, 1 ) );
+	AddFlag( ALib::CommandLineFlag( FLAG_FNAMES, false, 1 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_TRLEAD, false, 0 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_TRTRAIL, false, 0 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_WIDTH, false, 1 ) );
@@ -100,10 +102,11 @@ int TrimCommand ::	Execute( ALib::CommandLine & cmd ) {
         CSVTHROW( "Cannot use both " << FLAG_ALL << " and " << FLAG_SINGLE );
     }
 
-	ALib::CommaList cl( cmd.GetValue( FLAG_COLS, "" ) );
-	CommaListToIndex( cl, mFields );
+	mSpec.Bind( mFields );
+	mSpec.ReadFlags( cmd, "" );
 
-	IOManager io( cmd );
+	IOManager io( cmd, mSpec.HasNames() );
+	mSpec.Wire( io );
 	CSVRow row;
 
 	while( io.ReadCSV( row ) ) {

@@ -12,6 +12,7 @@
 
 #include "a_base.h"
 #include "csved_command.h"
+#include "csved_util.h"
 
 namespace CSVED {
 
@@ -33,6 +34,7 @@ class NumberCommand : public Command {
 		std::string ConvertField( const std::string & val, char ts, char dp );
 
 		std::vector <unsigned int> mFields;
+		FieldSpec mSpec;
 		std::string mFormat, mErrStr;
 		bool mErrExit, mHasErrStr;
 

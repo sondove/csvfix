@@ -32,7 +32,8 @@ const char * const PRINTF_HELP = {
 	"usage: csvfix printf [flags] [files ...]\n"
 	"where flags are:\n"
 	"  -fmt fmt\tspecify fields and printf-style formatters\n"
-	"  -f fields\tfield order to pass to formatter\n"
+	"  -f fields\tfield order to pass to formatter (by numeric index)\n"
+	"  -fn names\tfield order to pass to formatter (by header name)\n"
 	"  -q\t\tapply CSV quoting to each printf conversion\n"
 	"  -csv\t\ttreat output as CSV field and append to input row\n"
 	"#SMQ,SEP,IBL,IFN,OFL,SEP,SKIP,PASS"
@@ -48,6 +49,7 @@ PrintfCommand :: PrintfCommand( const string & name,
 
 	AddFlag( ALib::CommandLineFlag( FLAG_FMT, true, 1 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_COLS, false, 1 ) );
+	AddFlag( ALib::CommandLineFlag( FLAG_FNAMES, false, 1 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_QUOTE, false, 0 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_CSV, false, 0 ) );
 }
@@ -66,16 +68,12 @@ int PrintfCommand :: Execute( ALib::CommandLine & cmd ) {
     bool csv = cmd.HasFlag( FLAG_CSV );
 
 	ParseFormat( fmt );
-	if ( cmd.HasFlag( FLAG_COLS ) ) {
-		ALib::CommaList cl( cmd.GetValue( FLAG_COLS ) );
-		CommaListToIndex( cl, mOrder );
-	}
-	else {
-		mOrder.clear();
-	}
+	mSpec.Bind( mOrder );
+	mSpec.ReadFlags( cmd );
 
 	CSVRow row;
-	IOManager io( cmd );
+	IOManager io( cmd, mSpec.HasNames() );
+	mSpec.Wire( io );
 
 	while( io.ReadCSV( row ) ) {
 		if ( Skip( io, row ) ) {

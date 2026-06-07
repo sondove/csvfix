@@ -11,6 +11,7 @@
 
 #include "a_base.h"
 #include "csved_command.h"
+#include "csved_util.h"
 
 namespace CSVED {
 
@@ -46,6 +47,7 @@ class EditCommand : public Command {
 
 		std::vector <EditSubCmd> mSubCmds;
 		std::vector <unsigned int> mCols;
+		FieldSpec mSpec;
 
 };
 

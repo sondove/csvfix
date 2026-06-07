@@ -11,6 +11,7 @@
 
 #include "a_base.h"
 #include "csved_command.h"
+#include "csved_util.h"
 
 namespace CSVED {
 
@@ -32,6 +33,7 @@ class TrimCommand : public Command {
 		void Chop( CSVRow & row, unsigned int  i );
 
 		FieldList mFields;
+		FieldSpec mSpec;
 		bool mTrimLead, mTrimTrail, mTrimAll, mTrim2Single;
 		std::vector <int> mWidths;
 

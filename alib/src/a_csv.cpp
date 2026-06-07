@@ -235,15 +235,28 @@ bool CSVStreamParser :: ParseNext( vector <string> & data ) {
 // Get zero-based column index from name in column map.
 //------------------------------------------------------------------------
 
-unsigned int CSVStreamParser :: ColIndexFromName(const string & name ) const {
+unsigned int CSVStreamParser :: ColIndexFromName(const string & name,
+													bool nocase ) const {
 	if ( mColMap.size() == 0 ) {
 		ATHROW( "CSV parser has no column map" );
 	}
-	ColNameMapType::const_iterator it = mColMap.find( name );
-	if ( it == mColMap.end() ) {
-		ATHROW( "Unknown column name: " << name );
+	if ( ! nocase ) {
+		ColNameMapType::const_iterator it = mColMap.find( name );
+		if ( it == mColMap.end() ) {
+			ATHROW( "Unknown column name: " << name );
+		}
+		return it->second;
 	}
-	return it->second;
+
+	// case-insensitive match against the header field names
+	string lname = ALib::Lower( name );
+	for ( ColNameMapType::const_iterator it = mColMap.begin();
+			it != mColMap.end(); ++it ) {
+		if ( ALib::Lower( it->first ) == lname ) {
+			return it->second;
+		}
+	}
+	ATHROW( "Unknown column name: " << name );
 }
 
 //------------------------------------------------------------------------

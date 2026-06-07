@@ -36,12 +36,13 @@ const char * const SORT_HELP = {
 	"sort on specified fields\n"
 	"usage: csvfix sort [flags] [files ...]\n"
 	"where flags are:\n"
-	"  -f  fields\tspecify fields on which to sort\n"
+	"  -f  fields\tspecify fields on which to sort, by numeric index\n"
+	"  -fn fields\tspecify fields on which to sort, by header name\n"
 	"  -rh\t\tretain header in output\n"
-	"\t\tfields  consist of index, and optional colon and two flags:\n"
+	"\t\tfields  consist of index or name, and optional colon and two flags:\n"
 	"\t\tN,S or I - numeric or alpha sort\n"
 	"\t\tA or D   - ascending or descending sort\n"
-	"\t\texample: -f 1:AN,2:DS\n"
+	"\t\texample: -f 1:AN,2:DS  or  -fn price:AN,date:DS\n"
 	"#SMQ,SEP,IBL,IFN,OFL"
 };
 
@@ -51,11 +52,27 @@ const char * const SORT_HELP = {
 
 SortCommand :: SortCommand( const string & name,
 							const string & desc )
-		: Command( name, desc, SORT_HELP ){
+		: Command( name, desc, SORT_HELP ), mHasNames( false ) {
 
 	AddFlag( ALib::CommandLineFlag( FLAG_COLS, false, 1 ) );
+	AddFlag( ALib::CommandLineFlag( FLAG_FNAMES, false, 1 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_RHEAD, false, 0 ) );
 
+}
+
+//----------------------------------------------------------------------------
+// Resolve field-name sort specs against the input header (case-insensitive).
+// Called for each new input stream when -fn was used.
+//----------------------------------------------------------------------------
+
+void SortCommand :: OnNewCSVStream( const string &,
+									const ALib::CSVStreamParser * p ) {
+	mFields.clear();
+	for ( unsigned int i = 0; i < mNameFields.size(); i++ ) {
+		unsigned int idx = p->ColIndexFromName( mNameFields[i].mName, true );
+		mFields.push_back( ALib::SortField( idx, mNameFields[i].mDir,
+												mNameFields[i].mType ) );
+	}
 }
 
 //----------------------------------------------------------------------------
@@ -83,7 +100,10 @@ int SortCommand :: Execute( ALib::CommandLine & cmd ) {
 
 	std::vector <CSVRow> rows;
 
-	IOManager io( cmd );
+	IOManager io( cmd, mHasNames );
+	if ( mHasNames ) {
+		io.AddWatcher( * this );
+	}
 	CSVRow row, header;
 
 	while ( io.ReadCSV( row ) ) {
@@ -179,13 +199,23 @@ static bool ParseFlags( const string & s,
 //---------------------------------------------------------------------------
 
 void SortCommand :: BuildFieldSpecs( const ALib::CommandLine & cmd ) {
-	if ( cmd.FlagCount( FLAG_COLS ) > 1 ) {
-		CSVTHROW( "Require single " << FLAG_COLS
+
+	if ( cmd.HasFlag( FLAG_COLS ) && cmd.HasFlag( FLAG_FNAMES ) ) {
+		CSVTHROW( "Cannot specify both " << FLAG_COLS
+					<< " and " << FLAG_FNAMES << " options" );
+	}
+
+	mHasNames = cmd.HasFlag( FLAG_FNAMES );
+	const char * flag = mHasNames ? FLAG_FNAMES : FLAG_COLS;
+
+	if ( cmd.FlagCount( flag ) > 1 ) {
+		CSVTHROW( "Require single " << flag
 					<< " flag to specify sort columns" );
 	}
-	ALib::CommaList cl( cmd.GetValue( FLAG_COLS, "1" ) );
+	// when sorting by name there is no sensible numeric default
+	ALib::CommaList cl( cmd.GetValue( flag, mHasNames ? "" : "1" ) );
 	if ( cl.Size() < 1 ) {
-		CSVTHROW( "Fields must be specified with " << FLAG_COLS << " flag " );
+		CSVTHROW( "Fields must be specified with " << flag << " flag " );
 	}
 	for ( unsigned int i = 0; i < cl.Size(); i++ ) {
 		vector <string> tmp;
@@ -205,15 +235,27 @@ void SortCommand :: BuildFieldSpecs( const ALib::CommandLine & cmd ) {
 			CSVTHROW( "Invalid characters in field specification " << cl.At(i) );
 		}
 
-		if ( ! ALib::IsInteger( tmp[0] ) ) {
-			CSVTHROW( "Index in field specification must be integer: " << cl.At(i) );
+		if ( mHasNames ) {
+			// field by header name - resolved later from the header
+			NameField nf;
+			nf.mName = tmp[0];
+			nf.mDir = direct;
+			nf.mType = ctype;
+			mNameFields.push_back( nf );
 		}
-		unsigned int idx = ALib::ToInteger( tmp[0] );
-		if ( idx == 0 ) {
-			CSVTHROW( "Index must be non-zero in field specification: " << cl.At(i) );
+		else {
+			if ( ! ALib::IsInteger( tmp[0] ) ) {
+				CSVTHROW( "Index in field specification must be integer: "
+							<< cl.At(i) << " (use " << FLAG_FNAMES
+							<< " for header names)" );
+			}
+			unsigned int idx = ALib::ToInteger( tmp[0] );
+			if ( idx == 0 ) {
+				CSVTHROW( "Index must be non-zero in field specification: "
+							<< cl.At(i) );
+			}
+			mFields.push_back( ALib::SortField( idx - 1, direct, ctype ) );
 		}
-
-		mFields.push_back( ALib::SortField( idx - 1, direct, ctype ) );
 	}
 }
 

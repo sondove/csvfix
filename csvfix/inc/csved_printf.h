@@ -11,6 +11,7 @@
 
 #include "a_base.h"
 #include "csved_command.h"
+#include "csved_util.h"
 #include <map>
 
 namespace CSVED {
@@ -47,6 +48,7 @@ class PrintfCommand : public Command {
 
 		std::vector <Format> mFmtLine;
 		FieldList mOrder;
+		FieldSpec mSpec;
 		bool mCSVQuote;
 
 };

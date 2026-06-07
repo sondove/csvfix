@@ -12,6 +12,7 @@
 #include "a_base.h"
 #include "a_expr.h"
 #include "csved_command.h"
+#include "csved_ioman.h"
 
 namespace CSVED {
 
@@ -36,6 +37,7 @@ class FlattenCommand : public Command {
 
 		std::string mKey;
 		FieldList mKeyFields, mDataFields;
+		FieldSpec mDataSpec;
 		CSVRow mData;
 		bool mKeepKey;
 		std::string mMasterExpr;

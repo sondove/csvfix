@@ -58,7 +58,8 @@ const char * const FSPLIT_HELP = {
 	"split CSV field at fixed positions\n"
 	"usage: csvfix split_fixed  [flags] [file ...]\n"
 	"where flags are:\n"
-	"  -f field\tindex of the field to be split\n"
+	"  -f field\tnumeric index of the field to be split\n"
+	"  -fn name\theader name of the field to be split\n"
 	"  -p plist\tlist of positions to split, in start:len format\n"
 	"  -l lengths\tlengths of fields to split (mutually exclusive with -p)\n"
 	"  -k\t\tretain field being split in output (default is discard it)\n"
@@ -79,7 +80,8 @@ const char * const CSPLIT_HELP = {
 	"split CSV field at specific character(s) or character type transition\n"
 	"usage: csvfix split_char  [flags] [file ...]\n"
 	"where flags are:\n"
-	"  -f field\tindex of the field to be split (required)\n"
+	"  -f field\tnumeric index of the field to be split\n"
+	"  -fn name\theader name of the field to be split\n"
 	"  -c char\tcharacter to split at (default is space)\n"
 	"  -tcn\tsplit at first transition from character to number\n"
 	"  -tnc\tsplit at first transition from number to character\n"
@@ -96,7 +98,8 @@ SplitBase :: SplitBase( const string & name,
 						const string & help )
 		: Command( name, desc, help ) {
 
-	AddFlag( ALib::CommandLineFlag( FLAG_COLS, true, 1 ) );
+	AddFlag( ALib::CommandLineFlag( FLAG_COLS, false, 1 ) );
+	AddFlag( ALib::CommandLineFlag( FLAG_FNAMES, false, 1 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_KEEP, false, 0 ) );
 }
 
@@ -106,14 +109,21 @@ SplitBase :: SplitBase( const string & name,
 
 void SplitBase :: GetCommonFlags( ALib::CommandLine & cl ) {
 	mKeep = cl.HasFlag( FLAG_KEEP );
-	string nf = cl.GetValue( FLAG_COLS, "" );
-	if ( ! ALib::IsInteger( nf ) ) {
-		CSVTHROW( "Field specified by " << FLAG_COLS << " must be integer" );
+	mSpec.Bind( mFields );
+	mSpec.ReadFlags( cl );
+	if ( mSpec.Empty() ) {
+		CSVTHROW( "Need field specified by " << FLAG_COLS
+					<< " or " << FLAG_FNAMES << " flag" );
 	}
-	if ( ALib::ToInteger( nf ) - 1 < 0 ) {
-		CSVTHROW( "Invalid field index: " << nf );
-	}
-	mField = ALib::ToInteger( nf ) - 1;
+}
+
+//---------------------------------------------------------------------------
+// Wire up the IOManager so that a field specified by header name is resolved
+// once the input header has been read.
+//---------------------------------------------------------------------------
+
+void SplitBase :: SetupFieldIO( IOManager & io ) {
+	mSpec.Wire( io );
 }
 
 //---------------------------------------------------------------------------
@@ -301,7 +311,8 @@ int SplitFixed :: Execute( ALib::CommandLine & cmd ) {
         CSVTHROW( "Need one of" << FLAG_POS << " or " << FLAG_FLEN );
     }
 
-	IOManager io( cmd );
+	IOManager io( cmd, mSpec.HasNames() );
+	SetupFieldIO( io );
 	CSVRow row;
 
 	while( io.ReadCSV( row ) ) {
@@ -417,7 +428,8 @@ int SplitChar :: Execute( ALib::CommandLine & cmd ) {
 		mChars = ALib::UnEscape( sc );
 	}
 
-	IOManager io( cmd );
+	IOManager io( cmd, mSpec.HasNames() );
+	SetupFieldIO( io );
 	CSVRow row;
 
 	while( io.ReadCSV( row ) ) {

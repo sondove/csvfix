@@ -13,6 +13,7 @@
 #include "a_base.h"
 #include "a_expr.h"
 #include "csved_command.h"
+#include "csved_util.h"
 
 namespace CSVED {
 
@@ -64,6 +65,7 @@ class CallCommand : public Command {
 
 		std::string mDLL, mFuncName;
 		FieldList mFields;
+		FieldSpec mSpec;
 		FuncType mFunc;
 
 		unsigned int mOutBufSize;

@@ -14,6 +14,7 @@
 #include "a_expr.h"
 
 #include "csved_command.h"
+#include "csved_util.h"
 
 namespace CSVED {
 
@@ -47,6 +48,7 @@ class FindCommand : public Command {
 
 		std::vector <ALib::RegEx *> mExprs;
 		std::vector <unsigned int> mColIndex;
+		FieldSpec mSpec;
 
 		typedef std::pair<std::string,std::string> RangeData;
 		struct Range {

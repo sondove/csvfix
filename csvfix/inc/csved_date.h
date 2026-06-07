@@ -12,6 +12,7 @@
 #include "a_base.h"
 #include "a_date.h"
 #include "csved_command.h"
+#include "csved_util.h"
 
 namespace CSVED {
 
@@ -71,6 +72,7 @@ class DateReadCommand : public Command {
 		void ProcessFlags( ALib::CommandLine & cmd );
 
 		FieldList mFields;
+		FieldSpec mSpec;
 		MaskedDateReader * mReader;
 
 		enum WriteAction {
@@ -101,6 +103,7 @@ class DateFormatCommand : public Command {
 		void BuildFormat( const std::string & fmt );
 
 		FieldList mFields;
+		FieldSpec mSpec;
 
 		struct FmtEntry {
 			std::string mText;

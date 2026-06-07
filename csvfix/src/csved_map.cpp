@@ -34,7 +34,8 @@ const char * const MAP_HELP = {
 	"map input field values to new values on output\n"
 	"usage: csvfix map [flags] [file ...]\n"
 	"where flags are:\n"
-	"  -f fields\tfields to perform mapping on (default is all)\n"
+	"  -f fields\tfields to perform mapping on (by numeric index) (default is all)\n"
+	"  -fn names\tfields to perform mapping on (by header name) (default is all)\n"
 	"  -fv vals\tcomma-separated list of values to map from\n"
 	"  -tv vals\tpossibly empty list oof values to map to\n"
 	"  -ic\t\tignore case when mapping (default is to respect case)\n"
@@ -50,6 +51,7 @@ MapCommand ::	MapCommand( const string & name,
 		: Command( name, desc, MAP_HELP ), mIgnoreCase( false ) {
 
 	AddFlag( ALib::CommandLineFlag( FLAG_COLS, false, 1 ) );
+	AddFlag( ALib::CommandLineFlag( FLAG_FNAMES, false, 1 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_FROMV, true, 1 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_TOV, true, 1 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_ICASE, false, 0 ) );
@@ -64,7 +66,8 @@ int MapCommand :: Execute( ALib::CommandLine & cmd ) {
 	GetSkipOptions( cmd );
 	ProcessFlags( cmd );
 
-	IOManager io( cmd );
+	IOManager io( cmd, mSpec.HasNames() );
+	mSpec.Wire( io );
 
 	while( io.ReadCSV( mRow ) ) {
 		if ( Skip( io, mRow ) ) {
@@ -159,11 +162,13 @@ string MapCommand :: Expand( const string & val ) {
 void MapCommand :: ProcessFlags( ALib::CommandLine & cmd ) {
 	mIgnoreCase = cmd.HasFlag( FLAG_ICASE );
 
-	if ( cmd.HasFlag( FLAG_COLS ) ) {
-		CommaListToIndex( ALib::CommaList( cmd.GetValue( FLAG_COLS )), mFields );
-		if ( mFields.size() == 0 ) {
-			CSVTHROW( "Field list cannot be empty" );
-		}
+	mSpec.Bind( mFields );
+	mSpec.ReadFlags( cmd );
+	// -f / -fn are optional (no fields means map all fields), but if one was
+	// given it must not be empty
+	if ( ( cmd.HasFlag( FLAG_COLS ) || cmd.HasFlag( FLAG_FNAMES ) )
+			&& mSpec.Empty() ) {
+		CSVTHROW( "Field list cannot be empty" );
 	}
 
 	string v = cmd.GetValue( FLAG_FROMV );

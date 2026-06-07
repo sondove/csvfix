@@ -217,7 +217,8 @@ const char * const DIFF_HELP = {
 	"compare two CSV files and display differences\n"
 	"usage: csvfix diff [flags] file1 file2\n"
 	"where flags are:\n"
-	"  -f fields\tfields to check for differences (default all)\n"
+	"  -f fields\tfields to check for differences, by numeric index (default all)\n"
+	"  -fn names\tfields to check for differences, by header name\n"
 	"  -q\t\tdo not report, only return same/different status\n"
 	"  -ic\t\tignore case when diffing\n"
 	"  -is\t\tignore leading and trailing spaces when diffing\n"
@@ -233,6 +234,7 @@ DiffCommand :: DiffCommand( const string & name, const string & desc )
 				  mReport( true ), mTrim( false ), mIgnoreCase( false ) {
 
 	AddFlag( ALib::CommandLineFlag( FLAG_COLS, false, 1 ) );
+	AddFlag( ALib::CommandLineFlag( FLAG_FNAMES, false, 1 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_QUIET, false, 0 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_ICASE, false, 0 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_ISPACE, false, 0 ) );
@@ -244,12 +246,18 @@ DiffCommand :: DiffCommand( const string & name, const string & desc )
 // Helper to read the indexed input stream into a CSVList
 //----------------------------------------------------------------------------
 
-static void ReadCSV( IOManager & io, int index, CSVList & csvlist ) {
+static void ReadCSV( IOManager & io, int index, CSVList & csvlist,
+						FieldSpec * spec = 0 ) {
 
 	std::unique_ptr<ALib::CSVStreamParser> p( io.CreateStreamParser( index ) );
 
 	CSVRow row;
 	while( p->ParseNext( row ) ) {
+		// resolve any header-name fields from this stream's header, which
+		// has been parsed by the time the first row is returned.
+		if ( spec != 0 ) {
+			spec->ResolveOnce( p.get() );
+		}
 		csvlist.Add( row );
 	}
 }
@@ -263,13 +271,13 @@ static void ReadCSV( IOManager & io, int index, CSVList & csvlist ) {
 int DiffCommand :: Execute( ALib::CommandLine & cmd ) {
 
 	ProcessFlags( cmd );
-	IOManager io( cmd );
+	IOManager io( cmd, mSpec.HasNames() );
 	if ( io.InStreamCount() != 2 ) {
 		CSVTHROW( "diff needs two input files" );
 	}
 
 	CSVList src, dest;
-	ReadCSV( io, 0, src );
+	ReadCSV( io, 0, src, & mSpec );
 	ReadCSV( io, 1, dest );
 
 	Differ differ( this );
@@ -292,10 +300,8 @@ void DiffCommand :: ProcessFlags( ALib::CommandLine & cmd ) {
 	mReport = ! cmd.HasFlag( FLAG_QUIET );
 	mIgnoreCase = cmd.HasFlag( FLAG_ICASE );
 	mTrim = cmd.HasFlag( FLAG_ISPACE );
-	if ( cmd.HasFlag( FLAG_COLS ) ) {
-		ALib::CommaList cl( cmd.GetValue( FLAG_COLS ) );
-		CommaListToIndex( cl, mFields );
-	}
+	mSpec.Bind( mFields );
+	mSpec.ReadFlags( cmd, "" );
 }
 
 

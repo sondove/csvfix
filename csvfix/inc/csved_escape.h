@@ -11,6 +11,7 @@
 
 #include "a_base.h"
 #include "csved_command.h"
+#include "csved_util.h"
 
 namespace CSVED {
 
@@ -34,6 +35,7 @@ class EscCommand : public Command {
 		bool mSqlMode;
 		std::string mSpecial, mEsc;
 		std::vector <unsigned int> mCols;
+		FieldSpec mSpec;
 
 };
 
