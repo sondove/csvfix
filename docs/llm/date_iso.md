@@ -16,7 +16,7 @@ Reads CSV input (from the named files or standard input) and converts the dates 
 - `-m mask` — REQUIRED. Specifies the order of date components and their separators. The mask must be exactly 5 characters: positions 1, 3, 5 are one each of `d`, `m`, `y` (in any order, giving the day/month/year order of the input); positions 2 and 4 are the two separator characters, which must be non-alphanumeric. Examples: `d/m/y` reads `19/Aug/2005`; `m d,y` reads `Aug 20,2000`; `d m y` reads `4 Jul 2002`. An invalid mask (wrong length, missing a dmy letter, or alphanumeric separator) is an error.
 - `-cy year` — base year for interpreting 2-digit year values (default: `1930`). A 2-digit year less than `base - 1900` is taken as `20xx`, otherwise `19xx`. With the default 1930: `01`→2001, `29`→2029, `30`→1930, `36`→1936.
 - `-mn names` — comma-separated list of month names used to parse textual months; must be exactly 12 names in month order (default: English month names `January,February,...,December`). Matching is by case-insensitive prefix of at least 3 characters.
-- `-bdl` — output only the records that FAIL date conversion (list bad records). Mutually exclusive with `-bdx`. (Note: the binary's help text mislabels this flag as `-bxl`; the accepted flag is `-bdl`.)
+- `-bdl` — output only the records that FAIL date conversion (list bad records). Mutually exclusive with `-bdx`.
 - `-bdx` — silently exclude records that fail date conversion from the output. Mutually exclusive with `-bdl`.
 
 ## Selecting fields by name

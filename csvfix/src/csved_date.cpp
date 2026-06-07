@@ -46,8 +46,8 @@ const char * const DREAD_HELP = {
 	"  -m mask\tspecifies order of date components in d/m/y form\n"
 	"  -cy year\tspecifies base year for 2-digit year values\n"
 	"  -mn names\tspecifies month names - default is English months\n"
-	"  -bxl\t\tlist only records containing invalid dates\n"
-	"  -bdx\t\tsliently exclude records containing invalid dates\n"
+	"  -bdl\t\tlist only records containing invalid dates\n"
+	"  -bdx\t\tsilently exclude records containing invalid dates\n"
 	"#SMQ,SEP,IBL,IFN,OFL,SKIP,PASS"
 };
 

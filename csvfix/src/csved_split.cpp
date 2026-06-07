@@ -68,9 +68,10 @@ const char * const FSPLIT_HELP = {
 
 const char * const RESPLIT_HELP = {
 	"split using regular expression\n"
-	"usage: csvfix split_fixed  [flags] [file ...]\n"
+	"usage: csvfix split_regex  [flags] [file ...]\n"
 	"where flags are:\n"
-	"  -f field\tindex of the field to be split\n"
+	"  -f field\tnumeric index of the field to be split\n"
+	"  -fn name\theader name of the field to be split\n"
 	"  -r regex\tregular expression to use to perform split\n"
 	"  -ic\t\tignore case when matching regular expressions\n"
 	"  -k\t\tretain field being split in output (default is discard it)\n"
@@ -83,8 +84,8 @@ const char * const CSPLIT_HELP = {
 	"  -f field\tnumeric index of the field to be split\n"
 	"  -fn name\theader name of the field to be split\n"
 	"  -c char\tcharacter to split at (default is space)\n"
-	"  -tcn\tsplit at first transition from character to number\n"
-	"  -tnc\tsplit at first transition from number to character\n"
+	"  -tan\tsplit at first transition from alpha to number\n"
+	"  -tna\tsplit at first transition from number to alpha\n"
 	"  -k\t\tretain field being split in output (default is discard it)\n"
 	"#ALL,SKIP,PASS"
 };

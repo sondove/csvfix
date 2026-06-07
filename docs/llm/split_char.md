@@ -79,7 +79,6 @@ Output:
 ```
 
 ## Notes
-- The built binary's `help split_char` text labels the transition flags `-tcn`/`-tnc`; those names are wrong and rejected with `ERROR: Invalid option`. The real flags are `-tan` (alpha-to-number) and `-tna` (number-to-alpha), matching the manual and the source (`FLAG_TRANA2N = "-tan"`, `FLAG_TRANN2A = "-tna"`).
 - Transition splits always yield at most two sub-fields, cutting at the *first* matching boundary only. If no such transition exists, the field is left unchanged.
 - `-c` and the transition flags are mutually exclusive (`ERROR: Cannot specify both character and transiton`), and `-tan`/`-tna` cannot be combined with each other.
 - With `-k`, the original (unsplit) field value is appended at the end of the record, not left in its original position.

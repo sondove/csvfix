@@ -14,7 +14,7 @@ Note: CSVfix uses a POSIX **basic** regular-expression dialect, so capture group
 
 ## Options
 - `-f field` — 1-based numeric index of the field to split. Required unless `-fn` is used (mutually exclusive with `-fn`).
-- `-fn name` — header name (from the first input row, matched case-insensitively) of the field to split. Mutually exclusive with `-f`. (Accepted by the binary even though it is not listed in `csvfix help split_regex`.)
+- `-fn name` — header name (from the first input row, matched case-insensitively) of the field to split. Mutually exclusive with `-f`.
 - `-r regex` — regular expression used to perform the split. **Required.** Capture groups (`\( ... \)`) define the output fields.
 - `-ic` — ignore case when matching the regular expression (default: case-sensitive).
 - `-k` — retain the field being split in the output, appended after the new sub-fields at the split position (default: the original field is discarded).
@@ -76,7 +76,6 @@ Output:
 - **Basic (POSIX BRE) syntax.** Use `\(` `\)` for groups, `\{ \}` for counted repeats, etc. A bare `(...)` is literal. Common classes like `[a-z]`, `[0-9]`, `.`, `*`, `^`, `$` work as in BRE.
 - **No match / no groups:** if the pattern does not match, or matches but contains no capture group, the target field is removed and replaced by zero new fields (so the record loses a column) unless `-k` keeps the original. A group that legally matches the empty string yields an empty field `""`.
 - **Header handling:** when using `-fn`, the header row is transformed like any other row unless you pass `-ifn` to drop it. `-f` ignores header names entirely.
-- **Help-text quirk:** `csvfix help split_regex` mislabels the usage line as `split_fixed` and lists only `-f`; the actual built command is `split_regex` and also accepts `-fn`. This is a cosmetic bug in the help string, not in behaviour.
 - Sibling commands: [split_char](split_char.md) splits on a character or alpha/numeric transition; [split_fixed](split_fixed.md) splits at fixed positions/lengths. To recombine fields use `merge`.
 
 ## See also
