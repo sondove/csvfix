@@ -326,6 +326,11 @@ bool IOManager :: ReadLine( string & line ) {
 
 	while( mInputIndex < mInputs.size() ) {
 		if ( std::getline( In( mInputIndex ), line ) ) {
+			// getline strips the \n but leaves a \r from CRLF input - drop it
+			// so line-based commands see logical lines on every platform.
+			if ( ! line.empty() && line[ line.size() - 1 ] == '\r' ) {
+				line.erase( line.size() - 1 );
+			}
 			mCurrentLine++;
 			mCurrentInput = line;
 			if ( mIgnoreBlankLines && ALib::IsEmpty( line ) ) {

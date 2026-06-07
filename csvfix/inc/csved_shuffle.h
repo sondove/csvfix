@@ -10,6 +10,7 @@
 #define INC_CSVED_SHUFFLE_H
 
 #include "a_base.h"
+#include "a_rand.h"
 #include "csved_command.h"
 #include "csved_util.h"
 
@@ -34,6 +35,7 @@ class ShuffleCommand : public Command {
 		std::vector <CSVRow> mRows;
 		unsigned int mCount;
 		int mSeed;
+		ALib::RandGen mRng;
 		FieldList mFields;
 		FieldSpec mSpec;
 };

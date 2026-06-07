@@ -76,6 +76,7 @@ int ShuffleCommand :: Execute( ALib::CommandLine & cmd ) {
 		Shuffle( io );
 	}
 	else {
+		mRng.SetSeed( mSeed );		// deterministic, seed-reproducible shuffle
 		while( io.ReadCSV( row ) ) {
 			ShuffleFields( row );
 			io.WriteRow( row );
@@ -125,7 +126,12 @@ void ShuffleCommand ::ShuffleFields( CSVRow & row  ) {
 			f.push_back( row[fi] );
 		}
 	}
-	std::random_shuffle( f.begin(), f.end() );
+	// Fisher-Yates using the alib LCG so the result is deterministic and
+	// reproducible from the -rs seed on every platform.
+	for ( int i = (int) f.size() - 1; i > 0; i-- ) {
+		int j = mRng.NextInt( 0, i + 1 );
+		std::swap( f[i], f[j] );
+	}
 	unsigned int ri = 0;
 	for( unsigned int i = 0; i < mFields.size(); i++ ) {
 		unsigned int fi = mFields[i];

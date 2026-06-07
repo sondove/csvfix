@@ -184,6 +184,12 @@ void CSVChecker :: NextChar() {
 //----------------------------------------------------------------------------
 
 char CSVChecker :: Peek() {
+	// discard carriage returns so CRLF line endings are looked past in the
+	// same way NextChar() skips them - otherwise a trailing CR after a
+	// closing quote looks like an unexpected character.
+	while ( mSrc.peek() == '\r' ) {
+		mSrc.get();
+	}
 	int c = mSrc.peek();
 	return c == std::char_traits<char>::eof() ? END_INPUT : c;
 }
