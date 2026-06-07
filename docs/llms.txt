@@ -1,0 +1,691 @@
+# CSVfix — Single-File LLM Reference
+
+CSVfix is a command-line tool for manipulating CSV (and related) data. It is a
+pipeline of stream filters: each invocation runs one *command* that reads CSV
+records, transforms them, and writes CSV to standard output. This file is a
+condensed, single-stop reference: read the **Conventions** section once, then
+look up any command in the **Commands** section below. For long-form prose and
+extra worked examples, see the per-command files in `docs/llm/`.
+
+## Conventions (apply to every command)
+
+### Invocation
+```
+csvfix <command> [options] [file ...]
+```
+- Reads the named files in order; reads **standard input** if no files are given (or for a file named `-`).
+- Writes CSV to **standard output** unless `-o` is given.
+- A CSV "record" is a row; "fields" are 1-based, left to right. Output fields are double-quoted by default.
+
+### Standard options (accepted by most commands — not repeated per command)
+- `-o file` : write output to `file` instead of stdout.
+- `-sep c` / `-rsep c` : input field separator (`-rsep` also retains it on output). `-osep c` : output separator. `\t` means tab.
+- `-ibl` : ignore blank input lines.
+- `-smq` : "smart quote" — only quote output fields that need it. `-sqf fields` : always quote these fields.
+- `-ifn` : ignore the field-name (header) record — i.e. treat row 1 as a header and drop it.
+- `-hdr s` : write the literal string `s` as a header record before the output.
+- `-skip expr` / `-pass expr` : skip / pass-through rows for which the expression is true (see Mini-languages).
+- A command's help text ends with tokens (`#ALL,SMQ,SEP,IBL,IFN,OFL,SKIP,PASS`) indicating which of these groups it accepts; `ALL` means all of them.
+
+### Field lists
+Numeric field arguments are **1-based** comma lists and support ranges:
+`-f 1,3,5`, `-f 2:5` (= 2,3,4,5), descending `-f 5:2` (= 5,4,3,2).
+
+### Selecting fields by header name (`-fn`)
+Commands that take a numeric field list with `-f` also accept **`-fn`** to select
+fields by **header name** instead of index:
+- Names are matched **case-insensitively** against the first input row.
+- `-f` is numeric-only and rejects names; `-f` and `-fn` are **mutually exclusive**.
+- The header row is passed through and transformed like data unless you also pass `-ifn` to drop it (needed for `sort`, `unique`, aggregations).
+- Special forms: `sort -fn name:AN` / `rowsort -fn a,b,c` (sort flags after `:`), `join -fn left:right` (per-file names), `inter -fn Lname,Rname` (L/R = first/second file), `sql_insert -fn csvname:dbcol` and `sql_*` WHERE via `-wn csvname:dbcol`. `pivot`'s `-r`/`-c`/`-f` each accept an index **or** a header name automatically. `fixed`-format commands have no header and thus no `-fn`.
+
+### Mini-languages (referenced by some commands)
+- **Expression language** (`-skip`/`-pass`, `eval`, `edit`, `block`, `find -if`): C-like expressions; fields are `$1`,`$2`,… (or `$fieldname` with a header); supports arithmetic, string ops, comparisons, `&&`/`||`, and built-in functions.
+- **Regular expressions** (`find`/`remove`/`erase`/`split_regex`): POSIX-style; `split_regex` uses `\( \)` capture groups.
+- **Fixed-format specs** (`read_fixed`/`write_fixed`/`split_fixed`): column widths or `start:len` position pairs.
+
+## Command index
+- `ascii_table` — produce ascii table
+- `block` — perform actions on blocks of CSV records
+- `call` — call function in DLL
+- `check` — check CSV record format conforms to CSV standard
+- `date_format` — perform date formatting
+- `date_iso` — convert dates to ISO format
+- `diff` — compare two CSV files
+- `echo` — echo input to output
+- `edit` — edit fields
+- `erase` — erase fields using regular expressions
+- `escape` — escape special characters
+- `eval` — expression evaluation
+- `exclude` — exclude fields from output
+- `exec` — execute external command
+- `file_info` — add file information to output
+- `file_merge` — merge multiple sorted CSV files
+- `file_split` — split into files
+- `find` — find rows matching regular expression or range
+- `flatten` — flatten to single row
+- `from_xml` — convert from XML to CSV
+- `head` — list first CSV records
+- `inter` — interleave fields from two CSV sources
+- `join` — perform relational join
+- `lower` — convert to lowercase
+- `map` — map betwen CSV field values
+- `merge` — merge fields
+- `mixed` — convert to mixed case
+- `money` — format fields as money/currency values
+- `number` — convert formatted numeric fields to ordinary numeric
+- `odbc_get` — get data from ODBC database
+- `order` — change field order
+- `pad` — pad CSV records to fixed number of fields
+- `pivot` — simple pivot tables
+- `printf` — printf-style formatting
+- `put` — put literal or env variable into CSV output
+- `read_dsv` — convert DSV (delimiter separated variables) data to CSV
+- `read_fixed` — convert fixed format data to CSV
+- `read_multi` — read multi-line data
+- `read_xml` — convert XML table to CSV
+- `remove` — remove rows matching regular expression or range
+- `rmnew` — remove embedded newlines
+- `rowsort` — in-row sort of CSV fields
+- `sequence` — add sequence numbers
+- `shuffle` — randomly shuffle rows or fields
+- `sort` — sort CSV input on one or more fields
+- `split_char` — split a field at a character or alpha/number transition
+- `split_fixed` — split input using fixed sizes
+- `split_regex` — split a field using a regular expression (capture groups)
+- `sql_delete` — generate SQL DELETE statements
+- `sql_insert` — generate SQL INSERT statements
+- `sql_update` — generate SQL UPDATE statements
+- `squash` — squash duplicate rows to single row
+- `stat` — produce record/field stats for CSV files
+- `summary` — summarise CSV data
+- `tail` — list last CSV records
+- `template` — output via template
+- `timestamp` — add timestamp to CSV data
+- `to_xml` — convert CSV to XML
+- `trim` — trim leading/trailing spaces
+- `truncate` — truncate CSV records
+- `unflatten` — convert single row to multiple rows
+- `unique` — filter duplicate CSV records
+- `upper` — convert to uppercase
+- `validate` — validate CSV data files
+- `write_dsv` — convert CSV to DSV format
+- `write_fixed` — convert CSV to fixed format
+- `write_multi` — convert CSV to multi-line records
+
+## Commands
+
+### ascii_table — render CSV as a bordered ASCII-art table (output is NOT CSV)
+`csvfix ascii_table [options] [file ...]`
+- `-h head`: comma-list of column headers (centred) as heading row; `-h @` uses first input line as header. Default: no header.
+- `-ra fields`: 1-based field indexes to right-align (default all left-aligned).
+- `-s`: separator line after every data row (default only top/bottom).
+- eg: `csvfix ascii_table -h @ -ra 2,3 -s sales.csv` → bordered table, header from line 1, cols 2-3 right-aligned
+
+### block — keep/remove/mark contiguous runs of records between a begin and end expr
+`csvfix block [options] [file ...]`
+- `-be expr`: eval expr marking block start (required).
+- `-ee expr`: eval expr marking block end (required); EOF ends an unterminated block.
+- `-k`: keep block records only.
+- `-r`: remove block records, keep the rest.
+- `-m mark`: one or two comma-values; prepend new first field (val1 for in-block, val2/empty otherwise); writes all records.
+- `-x`: exclude the begin/end marker records from the block.
+- Exactly one of -k/-r/-m required. Field refs $1,$2.. in exprs.
+- eg: `csvfix block -be '$1=="FR"' -ee '$1=="IT"' -k countries.csv` → keeps FR..IT rows inclusive
+
+### call — call an exported DLL function per row, append returned fields (Windows-only; not in this build)
+`csvfix call [options] [file ...]`
+- `-fnc name`: exported function name (required).
+- `-dll name`: DLL path/filename (required).
+- `-bs size`: KB buffer for returned fields (default 4; min 4).
+- Func ret: 0=write row w/ appended fields; <0=drop row; >0=abort. Default passes all fields.
+- fn: fields to pass selectable by index (-f) or header name (-fn name).
+
+### check — validate input conforms to RFC 4180 CSV; reports problems, sets exit code
+`csvfix check [options] [file ...]`
+- `-nl`: allow newlines inside quoted fields (off by default).
+- `-q`: quiet; no output, exit 0=valid/1=fail (returns 1 on first failure).
+- `-s sep`: single-char separator instead of `,` (not space/`"`/`'`; departs from RFC 4180).
+- `-v`: verbose; print `<file> - OK` for each passing input.
+- Reads raw chars; standard pipeline flags (-o,-sep,-skip,etc.) do NOT apply. Exit 0=all valid, 1=any failed.
+
+### date_format — reformat ISO YYYY-MM-DD dates in selected fields via a template
+`csvfix date_format [options] [file ...]`
+- `-fmt fmt`: required template. Tokens: `d`/`dd` day, `m`/`mm` month#, `mmm` short month, `M` full month, `w` short weekday, `W` full weekday, `y`/`yyyy` 4-digit year. Other chars literal. No 2-digit-year token.
+- Non-ISO/invalid field values passed through unchanged. Use date_iso upstream first.
+- fn: fields selectable by index (-f) or header name (-fn); mutually exclusive.
+- eg: `csvfix date_format -f 2 -fmt 'w d mmm yyyy' bdays.csv` → `2000-01-20`→`Tue 20 Jan 2000`
+
+### date_iso — convert dates in selected fields to ISO YYYY-MM-DD using a mask
+`csvfix date_iso [options] [file ...]`
+- `-m mask`: REQUIRED 5-char mask; positions 1,3,5 = d/m/y in any order, positions 2,4 = non-alnum separators (e.g. `d/m/y`, `m d,y`).
+- `-cy year`: base year for 2-digit years (default 1930; 2-digit < base-1900 → 20xx else 19xx).
+- `-mn names`: 12 comma-separated month names for textual months (default English; matched by case-insensitive 3+ char prefix).
+- `-bdl`: output only records that FAIL conversion. `-bdx`: silently drop failing records. (mutually exclusive)
+- Unparseable field values left unchanged. fn: fields by index (-f) or header name (-fn).
+- eg: `csvfix date_iso -f 2 -m 'd/m/y' bdays.csv` → `20/8/00`→`2000-08-20`
+
+### diff — compare two CSV files on parsed field contents; emit patch-like report (NOT plain CSV)
+`csvfix diff [options] file1 file2`
+- `-q`: quiet; suppress report, set exit status only.
+- `-ic`: ignore case when comparing.
+- `-is`: ignore leading/trailing spaces when comparing.
+- Both file args required (no stdin). Output rows prefixed `-`=remove(file1)/`+`=add(file2), then 1-based row#, then row. Exit 0=identical, 1=differ.
+- fn: compare fields by index (-f) or header name (-fn, resolved vs file1 header).
+- eg: `csvfix diff -f 1 -ic left.csv right.csv` → compares only field 1, case-insensitively
+
+### echo — read CSV and write it back unchanged in normalised CSV (debug/reformat)
+`csvfix echo [options] [file ...]`
+- No command-specific options. Useful with -osep to change separator, -smq to alter quoting, -hdr to add header. Supports -skip but NOT -pass.
+
+### edit — sed-style regex search/replace on field values
+`csvfix edit -e cmd [options] [file ...]`
+- `-e cmd`: edit command (required, repeatable); only `s/find/replace/opts` substitute is implemented. `find` is regex, `opts` = `i` (case-insensitive) and/or `g` (all matches). Separator after `s` is any char except `\`. Captures `\(...\)` recalled as `\1`..`\9`. Applied in order.
+- fn: fields selectable by index `-f` or header name `-fn` (see Conventions); with `-fn` the header row is edited as data unless `-ifn` given.
+- eg: `csvfix edit -e 's/M/Male/' -f 3 names.csv` → field 3 "M"→"Male"
+
+### erase — remove fields matching a regex (shortens row)
+`csvfix erase (-r regexp | -n regexp) [options] [file ...]`
+- `-r regexp`: erase fields matching regexp (repeatable)
+- `-n regexp`: erase fields NOT matching regexp (repeatable)
+- `-k`: keep row as empty if all selected fields erased (default: drop such rows)
+- At least one of `-r`/`-n` required; multiple expressions OR together. Erasing deletes the cell entirely (surviving cells shift left), not blanks it.
+- fn: fields selectable by `-f`/`-fn` (see Conventions); with `-fn` header tested as data unless `-ifn`.
+- eg: `csvfix erase -r '^[0-9]+$' input.csv` → drops all-digit cells
+
+### escape — prefix special chars with an escape string (or SQL-quote)
+`csvfix escape (-s chars | -sql) [options] [file ...]`
+- `-s chars`: characters to escape (required unless `-sql`)
+- `-e esc`: escape string placed before each char (default `\`); if single char, it's added to the escaped set (so doubled in input)
+- `-sql`: SQL escaping — each `'` becomes `''`; mutually exclusive with `-s`/`-e`
+- `-noc`: disable CSVfix internal CSV escaping on output
+- fn: fields selectable by `-f`/`-fn` (see Conventions)
+- eg: `csvfix escape -sql names.csv` → O'Brien → O''Brien
+
+### eval — evaluate expressions per row, append or replace fields
+`csvfix eval (-e expr | -r f,expr) [options] [file ...]`
+- `-e expr`: eval expr, append result as new field (repeatable). Fields bound as `$1`,`$2`,...; also vars `line`, `file`, `fields`.
+- `-r f,expr`: eval expr, replace 1-based field `f` (>=1) instead of appending; cannot combine with `-d`
+- `-if expr`: conditional — if true eval next `-e` and skip the one after, else vice versa; requires exactly two following `-e`, no consecutive `-if`. Avoids evaluating both branches.
+- `-d`: discard input fields, output only expr results; cannot combine with `-r`
+- At least one `-e`/`-r` required. Single-quote exprs on Unix. Concat `.`, compare `==`.
+- eg: `csvfix eval -e '($2 + $3)/2' minmax.csv` → appends avg of fields 2,3
+
+### exclude — drop selected fields from output
+`csvfix exclude (-f fields | -fn names | -rf fields) [options] [file ...]`
+- `-f fields`: 1-based indexes to exclude, from start; ranges ok (`3:6`)
+- `-rf fields`: indexes counted from end (1=last); numeric only; not with `-f`/`-fn`
+- `-if expr`: exclude listed fields only on rows where expr is true; other rows pass unchanged
+- One of `-f`/`-fn`/`-rf` required (non-empty). Output rows may differ in field count when `-if` used.
+- fn: `-fn names` excludes by header name (see Conventions), mutually exclusive with `-f`/`-rf`; header transformed as data unless `-ifn`.
+- eg: `csvfix exclude -rf 1 people.csv` → drops last field of each row
+
+### exec — run external command per row, append or replace with its output
+`csvfix exec -c cmd [options] [file ...]`
+- `-c cmd`: command line to run per row (required); `%1`,`%2`,... = 1-based fields (out-of-range→empty), `%%`=literal `%`. UNIX escapes `\ ' "` in values. Run via system shell (pipes/redirects work).
+- `-r`: replace mode — emit raw command output as plain text instead of parsing as CSV and appending (default: parse+append; multi-line output → multiple rows)
+- `-ix ecode`: ignore exit codes <= ecode (default 0; larger = error)
+- `-d`: debug — print expanded command lines, do not execute
+- Slow (one spawn per row). `-pass` rows still execute command but emit original unchanged.
+- eg: `csvfix exec -r -c 'echo %2-%1' names.csv` → "Dickens-Charles"
+
+### file_info — prepend source file name and line number to each row
+`csvfix file_info [options] [file ...]`
+- `-b`: strip path, use base name only (default: path as given)
+- `-tc`: output name and line number as two separate fields (default: single `name (lineno)` field)
+- Line numbers 1-based, restart per file; stdin name is `<stdin>`. `-pass` rows emitted without file info added.
+- eg: `csvfix file_info -b cities.csv` → `"cities.csv (1)","London","GB"`
+
+### file_merge — merge pre-sorted CSV files into one sorted stream
+`csvfix file_merge [options] file1 file2 [file ...]`
+- Inputs MUST already be sorted ascending; only merges, does not sort. Comparison is lexicographic (string) on selected fields. Alias: `fmerge`.
+- `-f fields`: 1-based indexes to compare (default: all); mutually exclusive with `-fn`
+- fn: `-fn names` compares by header name (see Conventions); with `-fn`, header passed as data unless `-ifn`.
+- eg: `csvfix file_merge -fn name -ifn h1.csv h2.csv` → merges on `name` column, headers dropped
+
+### file_split — split CSV into multiple files by field value
+`csvfix file_split [options] [file ...]`
+- `-f fields`: 1-based split-field indexes (required unless -fn); mutually exclusive with -fn
+- `-fd dir`: output directory (default current)
+- `-fp pre`: filename prefix (default `file_`)
+- `-fx ext`: filename extension without dot (default `csv`)
+- `-ufn`: name files from split-field values instead of sequential numbers (no filename validation)
+- fn: split fields also selectable by header name via -fn (see Conventions)
+- Writes nothing to stdout; -o ignored. Files opened in append mode (clear targets between runs). Numbered names use 4-digit padding; multi-field -ufn keys joined with `_`.
+- eg: `csvfix file_split -f 2 cities.csv` → one file per distinct field-2 value (file_0001.csv, ...)
+
+### find — output rows matching regex/range/length/count/expr (grep for CSV)
+`csvfix find [options] [file ...]`
+- `-f fields`: 1-based fields to search (default all)
+- `-e expr`: regex match (repeatable; row matches if any matches)
+- `-s expr`: literal-string match (metachars escaped; repeatable)
+- `-ei expr` / `-si expr`: case-insensitive regex / literal (repeatable)
+- `-r lo:hi`: inclusive value range; numeric if both ends numeric, else string compare (repeatable)
+- `-l len`: match field char-length, single (`20`) or range (`1:10`) (repeatable)
+- `-fc count`: match by whole-row field count, single or range (`2:6`, `2:`, `:6`)
+- `-if expr`: output row if eval expr true (fields as $1,$2,...)
+- `-n`: output only integer count of matched rows (plain text)
+- fn: fields also selectable by header name via -fn (see Conventions)
+- At least one match flag required. `remove` is the exact inverse.
+- eg: `csvfix find -f 4 -r 60000:80000 emp.csv` → rows where field 4 in [60000,80000]
+
+### flatten — merge consecutive rows sharing a key into one row
+`csvfix flatten [options] [file ...]`
+- `-k key`: 1-based key field indexes defining group (default 1); numeric only, never by name
+- `-r`: drop key field(s) from output (default: retain key at row start)
+- `-f data`: 1-based data fields to collect (default all non-key fields)
+- `-me expr`: master/detail mode — rows where expr true become master, following rows appended to it; forbids -k/-f/-r
+- fn: data fields also selectable by header name via -fn (key stays numeric via -k)
+- Groups only by adjacent equal keys — sort by key first for global grouping.
+- eg: `csvfix flatten -me '$fields == 2' expend.csv` → each detail row prefixed with last master
+
+### from_xml — convert XML to CSV
+`csvfix from_xml [options] [file ...]`
+- `-re path`: REQUIRED. Comma-list of tag paths marking new record; path is tags joined by `@`, suffix-matched at tag boundaries (bare `character` matches anywhere)
+- `-ex path`: comma-list of tag paths to exclude (same suffix matching)
+- `-np`: omit parent (ancestor) tag data
+- `-nc`: omit child (descendant) tag data
+- `-na`: omit attribute data
+- `-ip`: prepend matched tag's full @-path as first field
+- `-ml sep`: separator joining multi-line text within one field (default space; escapes interpreted)
+- Input is XML not CSV: no -sep/-ibl/-ifn/-hdr/-skip/-pass. Field order fixed (parents, element, children); pipe through `order` to rearrange. Inverse of to_xml.
+- eg: `csvfix from_xml -re 'character' books.xml` → one CSV row per matched character element
+
+### head — output first N CSV records
+`csvfix head [options] [file ...]`
+- `-n count`: number of records to output (default 10); must be integer > 0
+- Counts CSV records (may span lines), not physical lines. Header treated as ordinary record and counted (-ifn to drop). -skip/-pass applied before counting. Sibling: tail.
+
+### inter — interleave fields from exactly two CSV sources
+`csvfix inter [options] [file ...]`
+- `-f fields`: comma-list of output field specs, each = source prefix `L`/`R` + 1-based index, e.g. `L1,R2,L3`; out-of-range yields empty field. Default: append all right fields to all left fields.
+- fn: via -fn use prefixed header names, e.g. `Lname,Rdob,Lsex` (L resolves against first input header, R against second)
+- Exactly two input streams required. Iteration driven by left source (stops when left exhausted); missing right rows become empty fields.
+- eg: `csvfix inter -f L1,R1,L2 a.csv b.csv` → right field inserted between left's two fields
+
+### join — relational join of two CSV inputs
+`csvfix join [options] file1 file2`
+- `-f jlist`: join spec by 1-based index, comma-list of `left:right` pairs, e.g. `2:1` or `1:2,3:3` (required unless -fn)
+- `-oj`: outer join — keep unmatched left rows (no appended right fields); excludes -inv
+- `-inv`: anti-join — output only left rows with NO match; excludes -oj
+- `-ic`: ignore case when comparing keys (default case-sensitive)
+- `-k`: keep the right-stream join key fields (default: dropped from output)
+- fn: join by header name via -fn left:right, e.g. `-fn code:custid`
+- Last input stream is special: every other stream is joined against it (loaded in memory; duplicate right keys give one row per match). Needs >= 2 streams. Left fields always kept, right key dropped unless -k.
+- eg: `csvfix join -f 2:1 cities.csv countries.csv` → city rows enriched with matching country name
+
+### lower — convert fields to lowercase
+`csvfix lower [options] [file ...]`
+- `-f fields`: 1-based field indexes to convert (default all)
+- fn: fields also selectable by header name via -fn (see Conventions)
+- Only alphabetic chars change. With -fn, header is processed/lowercased as data unless -ifn drops it. No -skip/-pass/-rsep/-osep. Siblings: upper, mixed.
+
+### map — map CSV field values from one literal value to another
+`csvfix map [options] [file ...]`
+- `-fv vals`: comma list of literal values to map FROM (required)
+- `-tv vals`: list of values to map TO (required; may be empty; not longer than -fv). Shorter -tv: extra froms fold to last to-value. `$N`=value of field N, `$$`=literal `$`
+- `-ic`: ignore case when matching -fv
+- fn: fields selectable by name via -fn (see Conventions); default all fields
+- eg: `csvfix map -fn status -fv 'Y,yes,N' -tv 'true,true,false' f.csv` → folds Y/yes→true, N→false; unmatched unchanged
+
+### merge — combine multiple fields into one
+`csvfix merge [options] [file ...]`
+- `-f fields`: fields to merge (>=2 required); omit to merge ALL fields into one
+- `-s sep`: join separator (default single space; C escapes \t \n \r \\). NOTE: not -sep
+- `-p pos`: 1-based insert position of merged field (default: first merged field's pos; past end = append)
+- `-k`: keep original source fields (default: remove them)
+- fn: fields selectable by name via -fn (see Conventions)
+- eg: `csvfix merge -f 1,2 -k -p 4 names.csv` → appends "Charles Dickens" keeping originals
+
+### mixed — convert fields to mixed (title) case
+`csvfix mixed [options] [file ...]`
+- (no command-specific options beyond field selection)
+- Each selected field lower-cased then first letter of each whitespace-word upper-cased; only whitespace marks word boundary (O'brien, Mary-jane)
+- fn: fields selectable by name via -fn (see Conventions); default all fields
+- siblings: upper/lower (unconditional casing, same options)
+
+### money — format numeric fields as currency
+`csvfix money [options] [file ...]`
+- `-dp chr`: decimal point char (default `.`)
+- `-ts chr`: thousands separator char (default `,`; `""` suppresses)
+- `-cs sym`: currency symbol prefix, after sign (default none)
+- `-ms minus`: prefix for negatives (default `-`)
+- `-ps plus`: prefix for positives (default none)
+- `-cn`: treat input as integer cents (divide by 100)
+- `-r`: replace field in place (default: append formatted field)
+- `-w width`: total field width, right-aligned amount (int 0-50; default 0). Sign emitted before padding
+- Always 2 decimals; non-numeric values pass through unchanged. Order: sign, symbol, amount
+- fn: fields selectable by name via -fn (see Conventions); default all fields
+- eg: `csvfix money -cn -r -cs '$' f.csv` → `12345`→`"$123.45"`
+
+### number — strip thousands/decimal formatting to plain numeric
+`csvfix number [options] [file ...]`
+- `-fmt fmt`: input format `EN` (, thousands . decimal) or `EU` (. thousands , decimal); default EN
+- `-es str`: output str for unparseable fields (excl. with -ec)
+- `-ec`: error and exit non-zero on parse failure (excl. with -es)
+- Strips thousands sep, normalises decimal to `.`; no rounding/padding. Unparseable passes through by default
+- fn: fields selectable by name via -fn (see Conventions); default all fields
+- eg: `csvfix number -fmt EU -es N/A f.csv` → `"1.234,56"`→`"1234.56"`, bad→`"N/A"`
+
+### odbc_get — run SQL via ODBC, output result set as CSV
+`csvfix odbc_get [options]`  (no input files read)
+- Windows-only; NOT in this build (`no such command: odbc_get`)
+- `-cs cstr`: ODBC connection string (excl. with -dir; one required)
+- `-dir dir`: use MS Text ODBC driver over .csv files in dir (each needs header row; excl. with -cs)
+- `-sql stmt`: SQL to run; `@file` reads SQL from file. Any SQL allowed (excl. with -tbl; one required)
+- `-tbl table`: extract whole table (= `SELECT * FROM [table]`; excl. with -sql)
+- `-ns null`: NULL representation string (defaults to `NULL` if flag absent; pass `-ns ""` for empty)
+- `-h`: emit SQL column names as leading header record
+- siblings: sql_insert/sql_update/sql_delete (write to DB)
+
+### order — reorder, duplicate, select or drop fields
+`csvfix order [options] [file ...]`  (exactly one of -f/-rf/-xf/-fn required)
+- `-f fields`: output order by 1-based index; may repeat (duplicate); ranges `a:b` (either direction). Missing index → empty field unless -nc
+- `-rf fields`: like -f but indexed from END (1=last)
+- `-xf fields`: exclude mode — output all fields EXCEPT listed; survivors keep order
+- `-nc`: omit (don't emit empty) missing fields
+- fn: `-fn names` selects by header name (only command accepting -fn directly); add -ifn to drop header
+- eg: `csvfix order -f 3,1 names.csv` → emits field3 then field1, dropping field2
+
+### pad — pad records out to a fixed field count
+`csvfix pad [options] [file ...]`
+- `-n count`: target field count, int >=0 (required); rows with more fields pass through unchanged (never truncates)
+- `-p vals`: comma list of pad values (default empty string); used positionally, last value reused once exhausted
+- eg: `csvfix pad -n 5 -p NULL,0 f.csv` → 3-field row → adds NULL then 0 to reach 5
+
+### pivot — simple pivot table (row x column grid of an aggregated fact)
+`csvfix pivot [options] [file ...]`
+- `-c field`: field for column headers (required; 1-based index or header name, case-insensitive)
+- `-r field`: field for row headers (required; same syntax; must differ from -c)
+- `-a act`: aggregation: `sum`|`avg`|`count` (required; sum/avg need numeric fact)
+- `-f field`: fact field to aggregate (required; ignored for count)
+- No -fn (each of -c/-r/-f auto-detects index vs name). No -skip/-pass. Header not auto-detected — use -ifn to drop it. Rows/cols sorted; missing cells = 0.
+- eg: `csvfix pivot -ifn -c region -r product -a sum -f amount sales.csv` → grid summing amount per product (rows) x region (cols)
+
+### printf — printf-style formatting of each row
+`csvfix printf [options] [file ...]`
+- `-fmt fmt`: C printf format string (required); types `d i o x X u c s f e E g G`, `%%`, `%@` skips a field; \n \r \t escapes
+- `-f fields`: reorder fields fed to specifiers by 1-based index (excl. with -fn)
+- `-q`: CSV-quote %s string output (excl. with -csv)
+- `-csv`: append formatted result as new field, output whole row as CSV (excl. with -q)
+- Default output is plain text, not CSV. Specifiers consume fields left-to-right; extra fields dropped, missing fields → empty.
+- fn: also selectable by header name via -fn (see Conventions; excl. with -f)
+- eg: `csvfix printf -fmt "%1.1s. %s" names.csv` → `C. Dickens`
+
+### put — append a literal or env-variable value as a new field
+`csvfix put [options] [file ...]`
+- `-v val`: literal value put into every record (excl. with -e; one of -v/-e required)
+- `-e env`: env var name to put; special tokens `@DATETIME` (yyyy-mm-dd hh:mm:ss), `@DATE` (yyyy-mm-dd), `@COUNT` (per-row field count)
+- `-p pos`: 1-based insert position (default: append; pos beyond row length appends)
+- Adds exactly one field; chain multiple puts for more. Header treated as data unless -ifn.
+- eg: `csvfix put -e @DATE in.csv` → appends today's date to each row
+
+### read_dsv — convert delimiter-separated (DSV) data to CSV
+`csvfix read_dsv [options] [file ...]`
+- `-s sep`: single-char DSV separator (default `|`; only `\t` escape supported; space allowed)
+- `-f fields`: 1-based field indexes to keep/reorder (default all; out-of-range → empty)
+- `-csv`: interpret each field's contents as CSV (strip wrapping quotes, unescape `""`)
+- `-cm`: collapse consecutive separators (drop empty between-fields)
+- Backslash is escape: `\<sep>`→literal sep, `\\`→backslash; trailing `\` is error. No header handling; every line converted. No -fn. Inverse: write_dsv.
+- eg: `csvfix read_dsv -s ':' -cm colons.dat` → `"a","b","c"` from `a:::b:c`
+
+### read_fixed — convert fixed-column-position data to CSV
+`csvfix read_fixed [options] [file ...]`
+- `-f fields`: required; comma list of `start:width` specs (both 1-based positive ints); may overlap/repeat/reorder; start past EOL → empty
+- `-k`: keep trailing spaces (default right-trims them)
+- No -fn; no header handling. Inverse: write_fixed (split_fixed splits one field).
+- eg: `csvfix read_fixed -f 1:10,11:1 names.dat` → `"Geraldine","F"`
+
+### read_multi — group multi-line input into one CSV record per group
+`csvfix read_multi [options] [file ...]`
+- `-n lines`: fixed lines per record, each line → one field (int 1–200; excl. with -s)
+- `-s sep`: separator line (whole-line match) ending each record; allows variable field counts (excl. with -n)
+- Exactly one of -n/-s required. Trailing partial record still emitted; pipe through pad for uniform widths. Inverse: write_multi.
+- eg: `csvfix read_multi -s - heroes.txt` → one row per `-`-delimited block, fields = lines
+
+### read_xml — convert first HTML <table> in XML to CSV [REMOVED]
+`csvfix read_xml [file ...]`
+- REMOVED — not in this build (`help read_xml` → no such command). Use `from_xml` instead.
+- (Original: emitted first <table>'s <tr>/<td> as rows/fields, ignoring <th> and nested markup; only -o meaningful.)
+
+### remove — drop rows matching regex/string/range/length/count/expr (grep -v)
+`csvfix remove [options] [file ...]`
+- `-e expr`: regex; row removed if a searched field matches (repeatable)
+- `-s expr`: literal-string match (repeatable); `-ei`/`-si`: case-insensitive regex/literal
+- `-r range`: remove if searched field in range e.g. `40:50` (repeatable)
+- `-l length`: remove by field length (may be range e.g. `3:5`)
+- `-fc count`: remove by CSV field count (int or `min:max`)
+- `-if expr`: remove if eval expr true (fields as `$1`,`$2`,…; see eval)
+- `-f fields`: 1-based field indexes to search (default all; excl. with -fn)
+- `-n`: output only count of surviving rows
+- At least one test required; tests OR together. Inverse is find. Header is data unless -ifn.
+- fn: fields also selectable by header name via -fn (see Conventions; excl. with -f)
+- eg: `csvfix remove -if '$3 > 40' names.csv` → drops rows where field 3 > 40
+
+### rmnew — remove embedded newlines inside CSV fields
+`csvfix rmnew [options] [file ...]`
+- `-s sep`: text replacing each embedded newline (`\t`→tab); default empty (just deleted). Mutually exclusive with `-x`.
+- `-x`: keep only text before the first newline in a field; discard the rest.
+- `-f fields`: 1-based fields to process (default all).
+- fn: fields also selectable by header name via -fn (see Conventions); header re-emitted as quoted data row unless -ifn.
+- eg: `csvfix rmnew -fn notes -s ' | ' n2.csv` → joins embedded newlines in `notes` with ` | `
+
+### rowsort — sort field values within each row (left-to-right), not the records
+`csvfix rowsort [options] [file ...]`
+- `-f fields`: 1-based fields to sort; must be contiguous (e.g. `2:4`). Default all.
+- `-a`/`-d`: ascending (default) / descending.
+- `-l`/`-n`: lexicographic (default) / numeric comparison.
+- fn: fields also selectable by header name via -fn (must resolve to contiguous block); header passes through unchanged unless -ifn.
+- eg: `csvfix rowsort -f 2:4 -n rs2.csv` → numerically sorts the values in cols 2-4 of each row
+
+### sequence — insert a generated sequence number into each row
+`csvfix sequence [options] [file ...]`
+- `-n start`: starting integer (default 1, may be negative).
+- `-i inc`: positive increment (default 1, nonzero); mutually exclusive with -d.
+- `-d dec`: positive decrement (count down); mutually exclusive with -i.
+- `-p pad`: zero-pad width (default 0; applied only to non-negative values).
+- `-f pos`: 1-based field position to insert at (default 1; existing fields shift right). Numeric only, no -fn.
+- `-m mask`: text mask with one `@` where the number goes (e.g. `ID@`→`ID1`).
+- eg: `csvfix sequence -n 100 -p 5 names.csv` → prepends `"00100"`, `"00101"`, ...
+
+### shuffle — randomly shuffle rows, or values within fields
+`csvfix shuffle [options] [file ...]`
+- `-n count`: emit only first count rows after shuffling (random sample; row mode only).
+- `-rs seed`: integer RNG seed (default from clock; fixed seed = reproducible; negative = use clock).
+- `-f fields`: shuffle values within these 1-based fields per row instead of shuffling rows (comma list, e.g. `1,2,3`).
+- fn: fields also selectable by header name via -fn; in field mode header treated as data unless -ifn. Row mode buffers all input in memory.
+- eg: `csvfix shuffle -rs 42 -n 2 sh.csv` → 2 random distinct rows (reproducible)
+
+### sort — sort whole records on one or more fields
+`csvfix sort [options] [file ...]`
+- `-f fields`: 1-based field indexes in priority order; each may carry `:`flags (default `1`).
+- `-rh`: retain header — do not sort the first row, re-emit it on top (written unquoted via simple comma join).
+- field-spec flags after `:` (one direction + one comparison, any order): `A` asc (default), `D` desc, `S` string/case-sensitive (default), `I` string ignore-case, `N` numeric (all values must be numbers). e.g. `2:DS`, `price:AN`.
+- fn: fields also selectable by header name via -fn, each carrying flags (e.g. `-fn price:AN,date:DS`); first row consumed as header (dropped unless -rh). Buffers all input in memory.
+- eg: `csvfix sort -fn price:AN -rh s2.csv` → records sorted numerically ascending by `price`, header kept
+
+### split_char — split one field at a separator char or alpha/numeric transition
+`csvfix split_char [options] [file ...]`
+- `-f field`: 1-based index of field to split (required unless -fn).
+- `-c char`: separator char(s) to split at (default single space); multi-char treated as one separator. Mutually exclusive with -tan/-tna.
+- `-tan`: split at first alpha→digit transition (2 sub-fields).
+- `-tna`: split at first digit→alpha transition (2 sub-fields).
+- `-k`: keep original field, appended last (default: discarded, replaced in place by sub-fields).
+- fn: field also selectable by header name via -fn; header split like data unless -ifn.
+- eg: `csvfix split_char -f 1 -tna idname.csv` → `1234fred`→`"1234","fred"`
+
+### split_fixed — split one field at fixed positions or lengths
+`csvfix split_fixed [options] [file ...]`
+- `-f field`: 1-based index of field to split (required unless -fn).
+- `-p plist`: comma list of `start:len` pairs, start 1-based (e.g. `1:4,5:1`); each pair = one sub-field. Mutually exclusive with -l.
+- `-l lengths`: comma list of fixed field lengths taken sequentially (e.g. `2,2,*`); exactly one `*` = remaining width. Mutually exclusive with -p.
+- `-k`: keep original field, appended after sub-fields (default discarded).
+- fn: field also selectable by header name via -fn; pair with -ifn or the header row is also split.
+- eg: `csvfix split_fixed -f 1 -p 1:4,5:1 emp.csv` → `1090M`→`"1090","M"`
+
+### split_regex — split one field via regex capture groups (POSIX BRE)
+`csvfix split_regex [options] [file ...]`
+- `-f field`: 1-based index of field to split (required unless -fn).
+- `-r regex`: REQUIRED. Each escaped capture group `\( ... \)` becomes one new field; bare `()` are literal. No group/no match → field removed (unless -k).
+- `-ic`: ignore case when matching (default case-sensitive).
+- `-k`: keep original field, appended after new sub-fields (default discarded).
+- fn: field also selectable by header name via -fn; header transformed like data unless -ifn.
+- eg: `csvfix split_regex -f 1 -r '\([a-z]*\)\([0-9]*\)' sr1.csv` → `abc123`→`"abc","123"`
+
+### sql_delete — emit one SQL DELETE statement per CSV row
+`csvfix sql_delete -t table (-w|-wn fields) [options] [file ...]`
+- `-t table`: target table (required)
+- `-w idx:col,...`: WHERE fields by 1-based index→column (required unless -wn)
+- `-wn name:col,...`: WHERE fields by header name→column (use -ifn to drop header)
+- `-s sep`: statement separator after each DELETE (default `;`; escapes interpreted, e.g. `' GO\n'`)
+- `-nq idx,...`: 1-based field positions emitted unquoted
+- `-qn`: force-quote NULL values
+- `-en`: empty fields → SQL NULL (rendered `IS NULL` in WHERE)
+- WHERE is `col=value AND ...`; strings single-quoted, apostrophes doubled. Generates text only, no DB connection.
+- eg: `csvfix sql_delete -t mailing -w 1:fname,2:sname names.csv` → `DELETE FROM mailing WHERE fname = 'Charles' AND sname = 'Dickens'`
+
+### sql_insert — emit one SQL INSERT statement per CSV row
+`csvfix sql_insert -t table (-f|-fn fields) [options] [file ...]`
+- `-t table`: target table (required)
+- `-f idx:col,...`: select CSV fields by 1-based index→column; colname mandatory; only listed fields output (excl. -fn)
+- `-fn name:col,...`: select fields by header name→column (excl. -f; use -ifn to drop header row)
+- `-s sep`: separator after each INSERT (default `\n;\n`; escapes interpreted)
+- `-nq pos,...`: 1-based positions among SELECTED output cols left unquoted
+- `-qn`: force-quote NULL; `-en`: empty fields → NULL
+- Missing referenced field is a fatal error. Strings single-quoted, apostrophes doubled.
+- fn: fields selectable by header name via `-fn name:dbcol`
+- eg: `csvfix sql_insert -t people -f 1:fname,2:sname names.csv` → `INSERT INTO people ( fname, sname ) VALUES( 'Charles', 'Dickens')`
+
+### sql_update — emit one SQL UPDATE statement per CSV row
+`csvfix sql_update -t table (-f|-fn set) (-w|-wn where) [options] [file ...]`
+- `-t table`: target table (required)
+- `-f idx:col,...` / `-fn name:col,...`: SET-clause fields (required; index vs header-name forms, mutually exclusive)
+- `-w idx:col,...` / `-wn name:col,...`: WHERE-clause fields (required — refuses UPDATE without WHERE; index vs name forms)
+- `-s sep`: separator after each statement (default `;`)
+- `-nq idx,...`: field indexes left unquoted; `-qn`: force-quote NULL; `-en`: empty → NULL
+- Use -ifn with named forms so header isn't emitted. Strings quoted, apostrophes doubled.
+- fn: SET/WHERE fields selectable by header name via `-fn`/`-wn` (name:col form)
+- eg: `csvfix sql_update -t product -fn price:price -wn id:product_id -ifn prices.csv` → `UPDATE product SET price = '9.99' WHERE product_id = '101'`
+
+### squash — aggregate duplicate rows, summing value fields per key group
+`csvfix squash (-f|-fn key) -n fields [options] [file ...]`
+- `-f idx,...`: key fields by 1-based index (required unless -fn)
+- `-fn names,...`: key fields by header name (use -ifn to drop header)
+- `-n idx,...`: value fields summed per group, by 1-based index (required; always numeric index even with named key)
+- `-nn val`: substitute for non-numeric value in -n field (else error); must match type
+- `-rn`: sum as real numbers (default integer; reals print with trailing zeros trimmed)
+- Output: key field(s) + per-group sums. Rows NOT in input order (map order, effectively sorted). Aggregates, not dedup (see unique).
+- fn: key fields selectable by header name via -fn
+- eg: `csvfix squash -f 1 -n 3 sq.csv` → `"apple","8"` / `"banana","6"`
+
+### stat — record/field statistics per CSV file
+`csvfix stat [options] [file ...]`
+- `-fs`: full per-field stats (`filename,fieldname,type,minlen,maxlen`) instead of default per-file row
+- `-fn`: first record is a header supplying field names (only meaningful with -fs; NOT field-selection)
+- Default output: `filename,records,min-field-count,max-field-count,maxlen-1,maxlen-2,...`
+- Types: `empty`/`number`/`string` (one-way to string; empties never change type). Counts CSV records, per-file (no cross-file aggregation).
+- eg: `csvfix stat -fs -fn data.csv` → `"data.csv","first","string","4","7"`
+
+### summary — apply one aggregate function across all rows
+`csvfix summary (one summary flag) [options] [file ...]`
+- `-avg f,...` / `-sum f,...` / `-med f,...`: numeric avg/sum/median per listed field → one row
+- `-frq f,...`: prefix each row (input order) with count sharing same combined field value
+- `-mod f,...`: emit rows tied for highest frequency, prefixed with that count
+- `-min f,...` / `-max f,...`: emit all rows holding the min/max (numeric if both numbers, else string compare)
+- `-siz`: per-column `index: minlen,maxlen` (plain text, all fields, no arg)
+- Exactly one flag required. Buffers all rows (except -siz). Fields are 1-based indexes; non-numeric → 0 for numeric fns.
+- eg: `csvfix summary -frq 2 cities.csv` → `"3","London","GB"` (count prefixed)
+
+### tail — output last N CSV records
+`csvfix tail [-n count] [options] [file ...]`
+- `-n count`: number of trailing records (default 10)
+- Counts CSV records (not lines); buffers whole input, unsuitable for unbounded streams. -skip'd rows not counted toward N.
+
+### template — format each record through a text template (output is not CSV)
+`csvfix template (-tf file | -ts str) [-fn ftpl] [options] [file ...]`
+- `-tf file`: read template from file (excl. -ts; binary help misprints as -ft). Each line gets trailing \n
+- `-ts str`: inline template (excl. -tf; C escapes interpreted, literal braces as `\{` `\}`; no implicit trailing newline)
+- `-fn ftpl`: write each record to its own file named by template `ftpl` (e.g. `out/{1}.txt`); dir must exist, overwrites; no stdout/-o
+- Placeholders: `{N}` = field N (1-based; out-of-range → empty; `{0}`/non-int = error); `{@ expr }` = expression eval with fields as `$1,$2,...`
+- Note: here -fn is the output-filename template, NOT field-by-name selection.
+- eg: `csvfix template -ts '{2}, {1} ({3})\n' names.csv` → `Dickens, Charles (M)`
+
+### timestamp — prepend a run-time timestamp field to each row
+`csvfix timestamp [options] [file ...]`
+- `-d`: date part only (`YYYY-MM-DD`); excludes `-t`
+- `-t`: time part only (`HH:MM:SS`); excludes `-d`
+- `-n`: numeric, no separators (e.g. `20260607183420`); combines with `-d`/`-t`
+- `-rt`: re-sample clock per row (default: one stamp for all rows)
+- New field is always prepended as col 1; local time. Default fmt `YYYY-MM-DD HH:MM:SS`.
+
+### to_xml — convert CSV to XML
+`csvfix to_xml [options] [file ...]`
+- `-xf file`: XML spec file defining nested output tree; if omitted, emits XHTML `<table>`/`<tr>`/`<td>`
+- `-in ind`: indent = spaces-per-level integer or `tabs` (default: 4)
+- `-et`: always emit explicit end tags vs self-closing empty `<tag />` (spec mode only)
+- Spec file (indent = nesting): `tag NAME [group F,...] [attrib NAME F]...`, `text F`, `cdata F`; F is 1-based; grouping is by adjacency (sort first). `from_xml` reverses.
+- eg: `csvfix to_xml -ifn tx.csv` → XHTML table, header row dropped
+
+### trim — trim whitespace and/or truncate field widths
+`csvfix trim [options] [file ...]`
+- `-l`: trim leading only; `-t`: trim trailing only (default both)
+- `-a`: remove all whitespace anywhere; excludes `-s`
+- `-s`: collapse whitespace runs to single space; excludes `-a`
+- `-w widths`: comma list of widths, keep leftmost chars; negative = skip that field; aligns with `-f`/`-fn` or positional. Applied after trimming.
+- fn: fields selectable by index `-f` or header name `-fn` (mutually exclusive)
+- eg: `csvfix trim -s multi.csv` → `"a   b"` becomes `"a b"`
+
+### truncate — cut each row to its first N fields
+`csvfix truncate -n count [options] [file ...]`
+- `-n count`: required; integer >= 0; rows longer than count are cut, shorter rows pass unchanged (never adds fields)
+- Position-only (no `-f`/`-fn`). `-n 0` gives empty rows; negative rejected. Use `order`/`pad` to grow rows.
+
+### unflatten — explode one packed row into multiple rows (inverse of flatten)
+`csvfix unflatten [options] [file ...]`
+- `-k key`: 1-based key field indexes repeated on each output row (default: `1`); keys excluded from data pool
+- `-n data`: data fields per output row (default: `1`); positive int; last row of a group may have fewer
+- Per-row, no cross-row grouping; numeric `-k` only (no `-fn`).
+- eg: `csvfix unflatten -n 2 uf2.csv` → `101,red,small,blue,large` becomes rows `"101","red","small"` / `"101","blue","large"`
+
+### unique — keep one row per duplicate key (or list duplicates)
+`csvfix unique [options] [file ...]`
+- `-d`: output only duplicated rows instead of unique ones (does not collapse; N occurrences emit N rows)
+- Default keeps first occurrence of each key; whole record is key if no `-f`/`-fn`. Reads all into memory. Multiple files are concatenated (merge+dedup).
+- fn: key fields selectable by index `-f` or header name `-fn` (mutually exclusive)
+- eg: `csvfix unique -f 1 post.csv` → one row per distinct first field
+
+### upper — convert selected fields to uppercase
+`csvfix upper [options] [file ...]`
+- Default converts all fields; only alphabetic chars affected.
+- fn: fields selectable by index `-f` or header name `-fn` (mutually exclusive); siblings `lower`, `mixed`
+
+### validate — check records against business rules from a rules file
+`csvfix validate -vf rulesfile [options] [file ...]`
+- `-vf file`: required; rules file (see below)
+- `-om mode`: `report` (default, non-CSV error report), `pass` (emit passing CSV), `fail` (emit failing CSV)
+- `-ec`: exit code 2 on any failure (default exit 0 regardless)
+- Rules (1-based fields, `*`=none): `required`, `notempty`, `fields * min:max`, `length F min:max`, `numeric F [lo:hi...]`, `values F v...`, `notvalues F v...`, `lookup * cur:lk,... file.csv`, `date F 'mask' [from:to]`. Field-number only (no `-fn`).
+- eg: `csvfix validate -om fail -vf rules.txt data.csv` → emits only the failing records as CSV
+
+### write_dsv — convert CSV to delimiter-separated values (inverse of read_dsv)
+`csvfix write_dsv [options] [file ...]`
+- `-f fields`: 1-based field indexes to write, in order (default: all). Out-of-range → empty field.
+- `-s sep`: single-char DSV output separator (default `|`; `\t` for tab). Multi-char rejected.
+- Separator/backslash in values escaped with backslash; no quoting. `-fn` writes transformed header unless `-ifn`.
+- fn: fields also selectable by header name via -fn (case-insensitive; mutually exclusive with -f)
+- eg: `csvfix write_dsv -f 1,2 names.csv` → `Charles|Dickens`
+
+### write_fixed — convert CSV to fixed-width text records (inverse of read_fixed)
+`csvfix write_fixed [options] [file ...]`
+- `-f fields`: required; comma list of `field:width` (1-based col : pad/truncate width, both positive). Left-justified, right-padded; longer values truncated. Missing field → empty.
+- `-ru`: emit 80-col ruler line before data (visual aid).
+- Plain text output, no separators/quoting. No -fn. Without -ifn, header row written as data.
+- eg: `csvfix write_fixed -f 1:16,2:16,3:1 names.csv` → each row padded into 16/16/1 columns
+
+### write_multi — convert flat CSV to multi-line master/detail records (inverse of read_multi)
+`csvfix write_multi [options] [file ...]`
+- `-m fields`: required; 1-based master fields. Grouping is positional on consecutive equal values — input should be pre-sorted.
+- `-d fields`: detail fields (default: all non-master fields).
+- `-rs sep`: emit literal `sep` as separator line after each group incl. last (default none; escapes interpreted).
+- Output fully quoted CSV by default; use `-smq` for minimal quoting.
+- eg: `csvfix write_multi -m 1,2 -rs '-----' -smq f.csv` → master row, then one detail row per record, `-----` between groups
