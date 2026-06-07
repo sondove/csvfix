@@ -36,7 +36,8 @@ const char * const ERASE_HELP = {
 	"erase fields using regular expressions"
 	"usage: csvfix erase  [flags] [file ...]\n"
 	"where flags are:\n"
-	"  -f fields\tlist of fields to check for exclusion (default is all)\n"
+	"  -f fields\tlist of fields to check, by numeric index (default is all)\n"
+	"  -fn names\tlist of fields to check, by header name\n"
 	"  -r regexp\terase fields that match this regular expression\n"
     "  -n regex\terase fields which do not match this regular expression\n"
 	"  -k\t\tif all fields are erased, retain empty row (default is to delete it)\n"
@@ -52,6 +53,7 @@ EraseCommand ::EraseCommand( const string & name,
 		: Command( name, desc, ERASE_HELP ) {
 
 	AddFlag( ALib::CommandLineFlag( FLAG_COLS, false, 1 ) );
+	AddFlag( ALib::CommandLineFlag( FLAG_FNAMES, false, 1 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_REGEX, false, 1 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_NOTRE, false, 1 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_KEEP, false, 0 ) );
@@ -67,7 +69,8 @@ int EraseCommand :: Execute( ALib::CommandLine & cmd ) {
 	GetSkipOptions( cmd );
 	ProcessFlags( cmd );
 
-	IOManager io( cmd );
+	IOManager io( cmd, mSpec.HasNames() );
+	mSpec.Wire( io );
 	CSVRow row, newrow;
 
 	while( io.ReadCSV( row ) ) {
@@ -137,7 +140,8 @@ void EraseCommand :: ProcessFlags( const ALib::CommandLine & cmd ) {
         }
     }
     mKeep = cmd.HasFlag( FLAG_KEEP );
-    CommaListToIndex( ALib::CommaList( cmd.GetValue( FLAG_COLS) ), mFields );
+    mSpec.Bind( mFields );
+    mSpec.ReadFlags( cmd, "" );
 
 }
 

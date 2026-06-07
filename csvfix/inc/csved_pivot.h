@@ -11,6 +11,7 @@
 
 #include "a_base.h"
 #include "csved_command.h"
+#include "csved_ioman.h"
 
 #include <utility>
 #include <string>
@@ -21,7 +22,7 @@ namespace CSVED {
 
 //---------------------------------------------------------------------------
 
-class PivotCommand : public Command {
+class PivotCommand : public Command, public IOWatcher {
 
 	public:
 
@@ -29,6 +30,10 @@ class PivotCommand : public Command {
 						const std::string & desc );
 
 		int Execute( ALib::CommandLine & cmd );
+
+		// resolve row/col/fact columns given by header name
+		void OnNewCSVStream( const std::string & filename,
+								const ALib::CSVStreamParser * p );
 
         enum class Action {
             Sum, Count, Average
@@ -76,6 +81,10 @@ class PivotCommand : public Command {
 
         Action mAction;
         unsigned int mCol, mRow, mFact;
+        // header names for col/row/fact when given by name (empty if numeric);
+        // resolved from the header at stream-open time
+        std::string mColName, mRowName, mFactName;
+        bool mHasNames;
 
 };
 

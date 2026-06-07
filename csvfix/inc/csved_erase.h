@@ -16,6 +16,7 @@
 
 #include "csved_command.h"
 #include "csved_types.h"
+#include "csved_util.h"
 
 namespace CSVED {
 
@@ -45,6 +46,7 @@ class EraseCommand : public Command {
         };
 
 		FieldList mFields;
+		FieldSpec mSpec;
 		std::vector <RegexAction> mExprs;
 		bool mKeep;
 };

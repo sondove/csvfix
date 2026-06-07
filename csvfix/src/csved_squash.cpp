@@ -130,7 +130,8 @@ const char * const UNIQUE_HELP = {
 	"squash duplicate rows to single row \n"
 	"usage: csvfix squash [flags] [files ...]\n"
 	"where flags are:\n"
-	"  -f fields\tfields specifying key (required)\n"
+	"  -f fields\tfields specifying key, by numeric index (required, or use -fn)\n"
+	"  -fn names\tfields specifying key, by header name\n"
 	"  -n fields\toutput only duplicate rows (required)\n"
 	"  -nn val\tvalue to use if -n field contains non-numeric value\n"
 	"  -rn \t\ttreat -n fields as real numbers rather than as integers\n"
@@ -146,7 +147,8 @@ SquashCommand :: SquashCommand( const string & name,
 								const string & desc )
 		: Command( name, desc, UNIQUE_HELP), mRealNums( false ) {
 
-	AddFlag( ALib::CommandLineFlag( FLAG_COLS, true, 1 ) );
+	AddFlag( ALib::CommandLineFlag( FLAG_COLS, false, 1 ) );
+	AddFlag( ALib::CommandLineFlag( FLAG_FNAMES, false, 1 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_NUM, true, 1 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_NONUM, false, 1 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_REALS, false, 0 ) );
@@ -162,7 +164,8 @@ int SquashCommand :: Execute( ALib::CommandLine & cmd ) {
     GetSkipOptions( cmd );
     ProcessFlags( cmd );
 
-	IOManager io( cmd );
+	IOManager io( cmd, mKeySpec.HasNames() );
+	mKeySpec.Wire( io );
 	CSVRow row;
 
 	while( io.ReadCSV( row ) ) {
@@ -250,13 +253,13 @@ string SquashCommand :: MakeKey( const CSVRow & row ) const{
 
 void SquashCommand :: ProcessFlags( const ALib::CommandLine & cmd ) {
 
-    string f = cmd.GetValue( FLAG_COLS, ""  );
-	if ( f == "" ) {
-        CSVTHROW( FLAG_COLS << " must specify field list" );
+    mKeySpec.Bind( mKeyFields );
+    mKeySpec.ReadFlags( cmd, "" );
+	if ( mKeySpec.Empty() ) {
+        CSVTHROW( FLAG_COLS << " or " << FLAG_FNAMES << " must specify field list" );
 	}
-	CommaListToIndex( ALib::CommaList( f ), mKeyFields );
 
-    f = cmd.GetValue( FLAG_NUM, ""  );
+    string f = cmd.GetValue( FLAG_NUM, ""  );
     if ( f == "" ) {
         CSVTHROW( FLAG_NUM << " must specify field list" );
     }

@@ -38,3 +38,47 @@ The docs are available in the `docs` subdirectory, that is being hosted as Githu
    
 Michael Wolber
 
+
+-----
+
+In the age of AI contributing to amazing libraries like this is easier than ever, and csvfix is a really useful command.
+
+I've created this fork so i can amend the utility for my needs, with no intention of upstreaming or maintaining it.
+
+This fork is based on version 1.7 (from [@the-reverend](https://github.com/the-reverend)'s backup) with my changes on top.
+
+I'll keep a running list of changes below
+
+----
+
+### Select fields by header name with `-fn`
+
+Every command that picks columns with `-f` now also accepts **`-fn`**, which
+takes the same comma-separated list but matched against the **header row**
+(the first input record) instead of by numeric index:
+
+```
+csvfix exclude -f 2      file.csv     # drop column 2
+csvfix exclude -fn age   file.csv     # drop the column headed "age"
+```
+
+Behaviour:
+
+   * Header names are matched **case-insensitively** (`-fn AGE` == `-fn age`).
+   * `-f` stays numeric only; passing a name to it is an error that points you
+     at `-fn`. `-f` and `-fn` are mutually exclusive.
+   * The header row is **kept and transformed like the data** (so
+     `exclude -fn age` emits a header without `age`). Add the existing `-ifn`
+     flag when you want the header dropped instead — needed for `sort`,
+     `unique`, etc. where the header must not be treated as data.
+   * Works across two-file commands too, resolving against each stream's own
+     header: `join -fn custid:id`, `inter -fn Lname,Rcity`.
+   * Commands whose `-f` carries extra syntax keep it: `sort -fn price:AN`,
+     `rowsort -fn a,b,c`, `squash -fn key`, `erase -fn col`, and
+     `sql_insert -fn name:dbcol` / `sql_delete -wn key:dbcol`.
+   * The 1.7 `pivot` command accepts a header name or an index for its
+     `-r`/`-c`/`-f` column options.
+
+The only field command without `-fn` is `fixed` (fixed-width input has no
+header to name).
+

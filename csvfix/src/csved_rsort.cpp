@@ -36,7 +36,8 @@ const char * const ROWSORT_HELP = {
 	"in-row sort of CSV fields\n"
 	"usage: csvfix rowsort [flags] [files ...]\n"
 	"where flags are:\n"
-	"  -f fields\tfields to sort (default is all)\n"
+	"  -f fields\tfields to sort, by numeric index (default is all)\n"
+	"  -fn names\tfields to sort, by header name\n"
 	"  -a \t\tsort ascending (default)\n"
 	"  -d \t\tsort descending \n"
 	"  -l \t\tlexographic order (default)\n"
@@ -53,6 +54,7 @@ RowSortCommand :: RowSortCommand( const string & name,
 		: Command( name, desc, ROWSORT_HELP ),
             mStartPos(UINT_MAX), mSortAscending( true ), mSortLex( true ){
    	AddFlag( ALib::CommandLineFlag( FLAG_COLS, false, 1, false) );
+   	AddFlag( ALib::CommandLineFlag( FLAG_FNAMES, false, 1, false) );
    	AddFlag( ALib::CommandLineFlag( FLAG_ASC, false, 0, false) );
    	AddFlag( ALib::CommandLineFlag( FLAG_DESC, false, 0, false) );
    	AddFlag( ALib::CommandLineFlag( FLAG_LEX, false, 0, false) );
@@ -68,7 +70,10 @@ int RowSortCommand :: Execute( ALib::CommandLine & cmd ) {
 	GetSkipOptions( cmd );
 	ProcessFlags( cmd );
 
-	IOManager io( cmd );
+	IOManager io( cmd, mSpec.HasNames() );
+	if ( mSpec.HasNames() ) {
+		io.AddWatcher( * this );
+	}
 	CSVRow row;
 
 	while( io.ReadCSV( row ) ) {
@@ -206,11 +211,21 @@ void RowSortCommand :: ProcessFlags( const ALib::CommandLine & cmd ) {
     NotBoth( cmd, FLAG_LEX, FLAG_NUM );
     mSortAscending = ! cmd.HasFlag( FLAG_DESC );
     mSortLex = ! cmd.HasFlag( FLAG_NUM );
-    if ( cmd.HasFlag( FLAG_COLS )) {
-        ALib::CommaList cl( cmd.GetValue( FLAG_COLS ));
-        CommaListToIndex( cl, mFields );
-        CheckContiguous( mFields );
+    mSpec.Bind( mFields );
+    mSpec.ReadFlags( cmd, "" );
+    if ( ! mSpec.HasNames() ) {
+        CheckContiguous( mFields );		// names checked after header resolve
     }
+}
+
+//---------------------------------------------------------------------------
+// Resolve field-name sort columns from the header, then re-check contiguity.
+//---------------------------------------------------------------------------
+
+void RowSortCommand :: OnNewCSVStream( const string &,
+										const ALib::CSVStreamParser * p ) {
+    mSpec.Resolve( p );
+    CheckContiguous( mFields );
 }
 
 } // end namespace

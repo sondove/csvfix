@@ -11,6 +11,7 @@
 
 #include "a_base.h"
 #include "csved_command.h"
+#include "csved_util.h"
 #include <map>
 #include <vector>
 #include <string>
@@ -49,6 +50,7 @@ class SquashCommand : public Command {
         void Key2CSV( const std::string & key, CSVRow & row);
 
         FieldList mKeyFields, mValFields;
+        FieldSpec mKeySpec;
         std::map <std::string, std::shared_ptr<SquashValues>> mKeyValues;
         std::string mNotNumVal;
         bool mRealNums;

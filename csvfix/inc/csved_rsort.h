@@ -11,6 +11,8 @@
 
 #include "a_base.h"
 #include "csved_command.h"
+#include "csved_ioman.h"
+#include "csved_util.h"
 #include <vector>
 #include <string>
 
@@ -20,7 +22,7 @@ namespace CSVED {
 
 //---------------------------------------------------------------------------
 
-class RowSortCommand : public Command {
+class RowSortCommand : public Command, public IOWatcher {
 
 	public:
 
@@ -28,6 +30,10 @@ class RowSortCommand : public Command {
 						const std::string & desc );
 
 		int Execute( ALib::CommandLine & cmd );
+
+		// resolve field-name sort columns from the input header
+		void OnNewCSVStream( const std::string & filename,
+								const ALib::CSVStreamParser * p );
 
 	private:
 
@@ -37,6 +43,7 @@ class RowSortCommand : public Command {
         void PutSortFields(  CSVRow & row, const std::vector <std::string> & sf ) const;
 
 		FieldList mFields;
+		FieldSpec mSpec;
 		unsigned int mStartPos;
 		bool mSortAscending, mSortLex;
 

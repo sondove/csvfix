@@ -43,10 +43,10 @@ const char * const PIVOT_HELP = {
 	"performs simple pivot table operations on CSV input\n"
 	"usage: csvfix pivot [flags] [file ...]\n"
 	"where flags are:\n"
-	"  -c field\tfield to use for column headers\n"
-	"  -r field\tfield to use for row header \n"
+	"  -c field\tfield to use for column headers (numeric index or header name)\n"
+	"  -r field\tfield to use for row header (numeric index or header name)\n"
 	"  -a act\taction to perform (one of sum, avg, count)\n"
-	"  -f field\tfield that represents the fact you want to perform action on\n"
+	"  -f field\tfact field to act on (numeric index or header name)\n"
 	"#ALL"
 };
 
@@ -56,7 +56,7 @@ const char * const PIVOT_HELP = {
 
 PivotCommand :: PivotCommand( const string & name,
 								const string & desc )
-		: Command( name, desc, PIVOT_HELP ) {
+		: Command( name, desc, PIVOT_HELP ), mHasNames( false ) {
 
 	AddFlag( ALib::CommandLineFlag( FLAG_ACTION, true, 1 ) );
 	AddFlag( ALib::CommandLineFlag( FLAG_COL, true, 1 ) );
@@ -74,7 +74,10 @@ PivotCommand :: PivotCommand( const string & name,
 int PivotCommand :: Execute( ALib::CommandLine & cmd ) {
 
     ProcessFlags( cmd );
-	IOManager io( cmd );
+	IOManager io( cmd, mHasNames );
+	if ( mHasNames ) {
+		io.AddWatcher( * this );
+	}
 	CSVRow row;
 
 	while( io.ReadCSV( row ) ) {
@@ -166,17 +169,24 @@ PivotCommand::ColRow PivotCommand:: MakeColRow( const CSVRow & row ) const {
 // Get positive integer value for row ,column ad fact  fields
 //---------------------------------------------------------------------------
 
+// Resolve a single-column option to a zero-based index. A numeric value is
+// resolved immediately; a non-numeric value is treated as a header name,
+// recorded in nameOut and resolved later from the header (see OnNewCSVStream).
 static unsigned int GetField( const ALib::CommandLine & cmd,
-                                const string & option ) {
+                                const string & option,
+                                string & nameOut, bool & hasNames ) {
     string rc = cmd.GetValue( option );
-    if ( ! ALib::IsInteger( rc ) ) {
-        CSVTHROW( "Value for " << option << " must be integer" );
+    if ( ALib::IsInteger( rc ) ) {
+        int n = ALib::ToInteger( rc );
+        if ( n <= 0 ) {
+            CSVTHROW( "Value for " << option << " must be greater than zero" );
+        }
+        nameOut = "";
+        return (unsigned int) n - 1;
     }
-    int n = ALib::ToInteger( rc );
-    if ( n <= 0 ) {
-        CSVTHROW( "Value for " << option << " must be greater than zero" );
-    }
-    return (unsigned int) n - 1;
+    nameOut = rc;			// resolve from header later
+    hasNames = true;
+    return 0;
 }
 
 //---------------------------------------------------------------------------
@@ -206,13 +216,30 @@ PivotCommand::Action GetAction( const ALib::CommandLine & cmd ) {
 //---------------------------------------------------------------------------
 
 void PivotCommand :: ProcessFlags( const ALib::CommandLine & cmd ) {
-    mRow = GetField( cmd, FLAG_ROW );
-    mCol = GetField( cmd, FLAG_COL );
-    mFact = GetField( cmd, FLAG_FACT );
-    if ( mRow == mCol ) {
+    mHasNames = false;
+    mRow = GetField( cmd, FLAG_ROW, mRowName, mHasNames );
+    mCol = GetField( cmd, FLAG_COL, mColName, mHasNames );
+    mFact = GetField( cmd, FLAG_FACT, mFactName, mHasNames );
+    // when both are numeric we can check distinctness now; otherwise it is
+    // re-checked once the names are resolved from the header
+    if ( mRowName.empty() && mColName.empty() && mRow == mCol ) {
         CSVTHROW( "Row and column options cannot have the same value" );
     }
     mAction = GetAction( cmd );
+}
+
+//---------------------------------------------------------------------------
+// Resolve any row/col/fact columns given by header name (case-insensitive).
+//---------------------------------------------------------------------------
+
+void PivotCommand :: OnNewCSVStream( const string &,
+									const ALib::CSVStreamParser * p ) {
+    if ( ! mRowName.empty() )  mRow  = p->ColIndexFromName( mRowName, true );
+    if ( ! mColName.empty() )  mCol  = p->ColIndexFromName( mColName, true );
+    if ( ! mFactName.empty() ) mFact = p->ColIndexFromName( mFactName, true );
+    if ( mRow == mCol ) {
+        CSVTHROW( "Row and column options cannot have the same value" );
+    }
 }
 
 //------------------------------------------------------------------------
